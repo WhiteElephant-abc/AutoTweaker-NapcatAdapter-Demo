@@ -5,11 +5,14 @@ import io.github.autotweaker.api.adapter.CoreAPI
 import io.github.autotweaker.api.types.SemVer
 import io.github.autotweaker.api.types.Url
 import io.github.autotweaker.api.types.adapter.AdapterInfo
+import org.slf4j.LoggerFactory
 
 class NapCatAdapter : Adapter {
+    private val logger = LoggerFactory.getLogger(NapCatAdapter::class.java)
     private var core: CoreAPI? = null
 
     override fun load(coreVersion: SemVer): AdapterInfo {
+        logger.info("Loading NapCat adapter")
         return AdapterInfo(
             name = "napcat",
             description = "NapCat adapter for AutoTweaker",
@@ -20,11 +23,11 @@ class NapCatAdapter : Adapter {
 
     override fun start(core: CoreAPI) {
         this.core = core
-        println("NapCat adapter started")
+        logger.info("NapCat adapter started")
     }
 
     override fun stop() {
         this.core = null
-        println("NapCat adapter stopped")
+        logger.info("NapCat adapter stopped")
     }
 }
