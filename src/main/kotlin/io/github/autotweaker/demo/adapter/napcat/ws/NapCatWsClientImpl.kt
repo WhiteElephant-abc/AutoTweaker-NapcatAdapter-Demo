@@ -16,6 +16,16 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
+/**
+ * NapCat WebSocket 客户端实现
+ *
+ * 使用 Ktor WebSocket 连接到 NapCat 服务器，提供：
+ * - OneBot 11 API 调用（类型安全）
+ * - 事件订阅与分发
+ * - 自动心跳和重连支持
+ *
+ * @property json JSON 序列化配置，默认忽略未知字段
+ */
 class NapCatWsClientImpl(
     private val json: Json = Json { ignoreUnknownKeys = true; isLenient = true }
 ) : NapCatWsClient {
@@ -447,4 +457,12 @@ class NapCatWsClientImpl(
     }
 }
 
+/**
+ * NapCat API 异常
+ *
+ * 当 API 调用失败时抛出。
+ *
+ * @property code 错误码（来自 OneBot 响应的 retcode）
+ * @property message 错误信息
+ */
 class NapCatApiException(val code: Int, override val message: String) : Exception(message)

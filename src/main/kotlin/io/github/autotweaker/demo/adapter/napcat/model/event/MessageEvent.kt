@@ -5,14 +5,37 @@ import io.github.autotweaker.demo.adapter.napcat.model.message.MessageChain
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+/**
+ * 消息事件基类
+ *
+ * 收到消息时触发，包括私聊消息和群消息。
+ */
 @Serializable
 sealed class MessageEvent : OneBotEvent() {
+    /** 消息 ID */
     abstract val messageId: Int
+
+    /** 消息内容（结构化） */
     abstract val message: MessageChain
+
+    /** 原始消息文本 */
     @SerialName("raw_message") abstract val rawMessage: String
+
+    /** 发送者信息 */
     abstract val sender: Sender
 }
 
+/**
+ * 私聊消息事件
+ *
+ * @property time 事件时间戳
+ * @property selfId 机器人 QQ 号
+ * @property messageId 消息 ID
+ * @property message 消息内容
+ * @property rawMessage 原始消息文本
+ * @property sender 发送者信息
+ * @property userId 发送者 QQ 号
+ */
 @Serializable
 @SerialName("private")
 data class PrivateMessageEvent(
@@ -25,6 +48,18 @@ data class PrivateMessageEvent(
     @SerialName("user_id") val userId: Long
 ) : MessageEvent()
 
+/**
+ * 群消息事件
+ *
+ * @property time 事件时间戳
+ * @property selfId 机器人 QQ 号
+ * @property messageId 消息 ID
+ * @property message 消息内容
+ * @property rawMessage 原始消息文本
+ * @property sender 发送者信息
+ * @property groupId 群号
+ * @property userId 发送者 QQ 号
+ */
 @Serializable
 @SerialName("group")
 data class GroupMessageEvent(
