@@ -15,6 +15,7 @@ import io.github.autotweaker.demo.adapter.napcat.permission.PermissionManager
 import io.github.autotweaker.demo.adapter.napcat.ws.NapCatWsClient
 import io.github.autotweaker.demo.adapter.napcat.ws.NapCatWsClientImpl
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
 import org.slf4j.LoggerFactory
 
 /**
@@ -24,7 +25,7 @@ import org.slf4j.LoggerFactory
  * 通过 WebSocket 连接 NapCat，接收消息事件，
  * 经过命令系统和会话管理后转发给 LLM 处理。
  *
- * 启动前会检查密钥库是否已解锁，未解锁时轮询等待。
+ * 启动前会检查密钥库是否已解锁，未解锁时等待 StateFlow 通知。
  */
 @AutoService(Adapter::class)
 class NapCatAdapter : Adapter {
@@ -67,9 +68,7 @@ class NapCatAdapter : Adapter {
 
     private suspend fun waitForUnlockAndInitialize(core: CoreAPI) {
         try {
-            while (!core.secret.isUnlocked.value) {
-                delay(1000)
-            }
+            core.secret.isUnlocked.first { it }
             logger.info("Secret unlocked, initializing components...")
             initializeComponents(core)
         } catch (e: CancellationException) {
