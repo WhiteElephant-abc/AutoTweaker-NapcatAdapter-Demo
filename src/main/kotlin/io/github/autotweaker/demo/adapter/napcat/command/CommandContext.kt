@@ -2,6 +2,7 @@ package io.github.autotweaker.demo.adapter.napcat.command
 
 import io.github.autotweaker.api.adapter.CoreAPI
 import io.github.autotweaker.demo.adapter.napcat.api.NapCatApi
+import io.github.autotweaker.demo.adapter.napcat.bridge.MessageBridge
 import io.github.autotweaker.demo.adapter.napcat.bridge.SessionManager
 import io.github.autotweaker.demo.adapter.napcat.permission.PermissionManager
 import io.github.autotweaker.demo.adapter.napcat.permission.Role
@@ -19,6 +20,7 @@ import io.github.autotweaker.demo.adapter.napcat.permission.Role
  * @property napCat NapCat API 实例
  * @property permissionManager 权限管理器
  * @property sessionManager 会话管理器
+ * @property messageBridge 消息桥接器
  */
 data class CommandContext(
     val userId: Long,
@@ -28,5 +30,6 @@ data class CommandContext(
     val core: CoreAPI,
     val napCat: NapCatApi,
     val permissionManager: PermissionManager,
-    val sessionManager: SessionManager
+    val sessionManager: SessionManager,
+    val messageBridge: MessageBridge
 )

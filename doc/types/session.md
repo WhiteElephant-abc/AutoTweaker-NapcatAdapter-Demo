@@ -323,6 +323,7 @@ sealed class SessionOutput {
 ```kotlin
 data class ToolCallRequest(
     val name: String,
+    val callId: String,
     val arguments: String,
     val reason: String? = null,
 )
@@ -331,6 +332,7 @@ data class ToolCallRequest(
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `name` | `String` | 工具名称 |
+| `callId` | `String` | 工具调用 ID |
 | `arguments` | `String` | 参数 JSON |
 | `reason` | `String?` | 调用原因 |
 

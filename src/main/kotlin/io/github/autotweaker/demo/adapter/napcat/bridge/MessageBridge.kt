@@ -60,6 +60,9 @@ class MessageBridge(
     /** 会话 → 上次上下文消息 ID 集合，用于检测新增消息 */
     private val lastMessageIds = ConcurrentHashMap<UUID, Set<UUID>>()
 
+    /** 会话 → 待审批的工具调用 ID 列表（用于序号反查） */
+    private val pendingToolCalls = ConcurrentHashMap<UUID, List<String>>()
+
     /**
      * 消息发送上下文
      *
@@ -239,6 +242,26 @@ class MessageBridge(
         }
     }
 
+    /**
+     * 获取待审批工具调用的 callId
+     *
+     * @param sessionId 会话 ID
+     * @param index 序号（1-based）
+     * @return callId，无效序号返回 null
+     */
+    fun getPendingCallId(sessionId: UUID, index: Int): String? {
+        val callIds = pendingToolCalls[sessionId] ?: return null
+        if (index < 1 || index > callIds.size) return null
+        return callIds[index - 1]
+    }
+
+    /**
+     * 清除待审批的工具调用记录
+     */
+    fun clearPendingToolCalls(sessionId: UUID) {
+        pendingToolCalls.remove(sessionId)
+    }
+
     private suspend fun sendReply(groupId: Long?, userId: Long, text: String) {
         if (text.isEmpty()) return
         try {
@@ -290,6 +313,10 @@ class MessageBridge(
                 is SessionOutput.Tool -> { /* 丢弃 */ }
 
                 is SessionOutput.ToolRequest -> {
+                    // 记录待审批的 callId 列表
+                    val callIds = sessionOutput.requests.map { it.callId }
+                    pendingToolCalls[sessionId] = callIds
+
                     val prompt = buildString {
                         appendLine("工具调用请求:")
                         sessionOutput.requests.forEachIndexed { index, req ->
@@ -448,7 +475,8 @@ class MessageBridge(
             core = core,
             napCat = napCat,
             permissionManager = permissionManager,
-            sessionManager = sessionManager
+            sessionManager = sessionManager,
+            messageBridge = this
         )
     }
 }
