@@ -1,6 +1,7 @@
 package io.github.autotweaker.demo.adapter.napcat.api
 
 import io.github.autotweaker.demo.adapter.napcat.model.data.*
+import io.github.autotweaker.demo.adapter.napcat.model.event.GroupMessageEvent
 import io.github.autotweaker.demo.adapter.napcat.model.message.MessageChain
 
 /**
@@ -152,6 +153,18 @@ interface NapCatApi {
      * @param enable true 为设置管理员，false 为取消管理员
      */
     suspend fun setGroupAdmin(groupId: Long, userId: Long, enable: Boolean)
+
+    // ==================== 消息历史 API ====================
+
+    /**
+     * 获取群消息历史
+     *
+     * @param groupId 群号
+     * @param messageSeq 起始消息序号（可选，不传则从最新开始）
+     * @param count 获取数量，默认 20
+     * @return 消息列表
+     */
+    suspend fun getGroupMsgHistory(groupId: Long, messageSeq: Long? = null, count: Int = 20): List<GroupMessageEvent>
 
     // ==================== 文件 API ====================
 

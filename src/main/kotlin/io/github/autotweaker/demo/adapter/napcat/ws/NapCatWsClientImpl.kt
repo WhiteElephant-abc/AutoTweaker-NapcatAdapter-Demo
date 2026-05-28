@@ -395,6 +395,34 @@ class NapCatWsClientImpl(
         callApiAndDecode("set_group_admin", params, JsonObject.serializer())
     }
 
+    override suspend fun getGroupMsgHistory(groupId: Long, messageSeq: Long?, count: Int): List<GroupMessageEvent> {
+        val params = buildMap {
+            put("group_id", json.encodeToJsonElement(groupId.toString()))
+            if (messageSeq != null) {
+                put("message_seq", json.encodeToJsonElement(messageSeq))
+            }
+            put("count", json.encodeToJsonElement(count))
+        }
+        val response = callApi("get_group_msg_history", params)
+        val data = response["data"]?.jsonObject ?: return emptyList()
+        val messages = data["messages"]?.jsonArray ?: return emptyList()
+        return messages.mapNotNull { element ->
+            try {
+                val obj = element.jsonObject
+                // 确保是群消息类型
+                val messageType = obj["message_type"]?.jsonPrimitive?.content
+                if (messageType == "group") {
+                    json.decodeFromJsonElement(GroupMessageEvent.serializer(), obj)
+                } else {
+                    null
+                }
+            } catch (e: Exception) {
+                logger.debug("Failed to parse group message: {}", e.message)
+                null
+            }
+        }
+    }
+
     override suspend fun getImage(file: String): FileInfo {
         val params = buildMap {
             put("file", json.encodeToJsonElement(file))

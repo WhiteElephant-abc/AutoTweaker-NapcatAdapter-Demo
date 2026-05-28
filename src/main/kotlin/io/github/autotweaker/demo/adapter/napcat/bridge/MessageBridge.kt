@@ -180,10 +180,62 @@ class MessageBridge(
         ensureListeners(handle.id)
 
         try {
-            core.session.send(handle.id, text)
+            // 构建带上下文的消息
+            val messageWithContext = if (groupId != null) {
+                buildMessageWithContext(groupId, userId, text)
+            } else {
+                text
+            }
+            core.session.send(handle.id, messageWithContext)
         } catch (e: Exception) {
             logger.error("Failed to send message to session {}", handle.id, e)
             sendReply(groupId, userId, "发送失败: ${e.message}")
+        }
+    }
+
+    /**
+     * 构建带上下文的消息
+     *
+     * 在消息开头注入最近的群消息历史和环境信息
+     */
+    private suspend fun buildMessageWithContext(groupId: Long, userId: Long, text: String): String {
+        return try {
+            // 获取最近的群消息历史
+            val history = napCat.getGroupMsgHistory(groupId, count = 20)
+
+            // 构建上下文
+            val contextBuilder = StringBuilder()
+            contextBuilder.appendLine("<context>")
+
+            // 获取群成员列表用于获取昵称
+            val members = try {
+                napCat.getGroupMemberList(groupId)
+            } catch (e: Exception) {
+                emptyList()
+            }
+
+            // 构建消息历史
+            history.reversed().forEach { msg ->
+                val nickname = members.find { it.userId == msg.userId }?.let {
+                    it.card.ifEmpty { it.nickname }
+                } ?: msg.sender.nickname.ifEmpty { msg.sender.userId.toString() }
+                val time = java.time.Instant.ofEpochSecond(msg.time)
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"))
+                contextBuilder.appendLine("[$time] $nickname: ${msg.rawMessage}")
+            }
+
+            contextBuilder.appendLine("</context>")
+            contextBuilder.appendLine()
+            contextBuilder.appendLine("<environment>用户所在平台：QQ，请注意输出格式</environment>")
+            contextBuilder.appendLine()
+            contextBuilder.append(text)
+
+            contextBuilder.toString()
+        } catch (e: Exception) {
+            logger.error("Failed to build message context", e)
+            // 失败时只发送原始消息
+            text
         }
     }
 
