@@ -2,7 +2,7 @@ plugins {
     kotlin("jvm") version "2.3.21"
     kotlin("kapt") version "2.3.21"
     kotlin("plugin.serialization") version "2.3.21"
-    application
+
 }
 
 group = "io.github.autotweaker.demo.adapter.napcat"
@@ -31,6 +31,3 @@ dependencies {
     kapt("com.google.auto.service:auto-service:1.1.1")
 }
 
-application {
-    mainClass.set("io.github.autotweaker.demo.adapter.napcat.MainKt")
-}
