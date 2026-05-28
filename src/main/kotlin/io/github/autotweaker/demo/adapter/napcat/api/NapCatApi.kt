@@ -2,6 +2,7 @@ package io.github.autotweaker.demo.adapter.napcat.api
 
 import io.github.autotweaker.demo.adapter.napcat.model.data.*
 import io.github.autotweaker.demo.adapter.napcat.model.event.GroupMessageEvent
+import io.github.autotweaker.demo.adapter.napcat.model.event.PrivateMessageEvent
 import io.github.autotweaker.demo.adapter.napcat.model.message.MessageChain
 
 /**
@@ -165,6 +166,16 @@ interface NapCatApi {
      * @return 消息列表
      */
     suspend fun getGroupMsgHistory(groupId: Long, messageSeq: Long? = null, count: Int = 20): List<GroupMessageEvent>
+
+    /**
+     * 获取私聊消息历史
+     *
+     * @param userId 用户 QQ 号
+     * @param messageSeq 起始消息序号（可选，不传则从最新开始）
+     * @param count 获取数量，默认 20
+     * @return 消息列表
+     */
+    suspend fun getPrivateMsgHistory(userId: Long, messageSeq: Long? = null, count: Int = 20): List<PrivateMessageEvent>
 
     // ==================== 文件 API ====================
 

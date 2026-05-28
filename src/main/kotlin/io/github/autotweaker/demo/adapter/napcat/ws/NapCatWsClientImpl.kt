@@ -423,6 +423,34 @@ class NapCatWsClientImpl(
         }
     }
 
+    override suspend fun getPrivateMsgHistory(userId: Long, messageSeq: Long?, count: Int): List<PrivateMessageEvent> {
+        val params = buildMap {
+            put("user_id", json.encodeToJsonElement(userId.toString()))
+            if (messageSeq != null) {
+                put("message_seq", json.encodeToJsonElement(messageSeq))
+            }
+            put("count", json.encodeToJsonElement(count))
+        }
+        val response = callApi("get_friend_msg_history", params)
+        val data = response["data"]?.jsonObject ?: return emptyList()
+        val messages = data["messages"]?.jsonArray ?: return emptyList()
+        return messages.mapNotNull { element ->
+            try {
+                val obj = element.jsonObject
+                // 确保是私聊消息类型
+                val messageType = obj["message_type"]?.jsonPrimitive?.content
+                if (messageType == "private") {
+                    json.decodeFromJsonElement(PrivateMessageEvent.serializer(), obj)
+                } else {
+                    null
+                }
+            } catch (e: Exception) {
+                logger.debug("Failed to parse private message: {}", e.message)
+                null
+            }
+        }
+    }
+
     override suspend fun getImage(file: String): FileInfo {
         val params = buildMap {
             put("file", json.encodeToJsonElement(file))
