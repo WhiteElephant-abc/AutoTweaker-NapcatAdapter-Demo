@@ -198,12 +198,12 @@ class SessionManager(
             // 优先使用用户选择的工作区
             val selectedWorkspaceId = userSelectedWorkspaces[userId]
             val workspace = if (selectedWorkspaceId != null) {
-                containerWorkspaces.find { it.id == selectedWorkspaceId }
+                containerWorkspaces.find { it.meta.id == selectedWorkspaceId }
                     ?: containerWorkspaces.first()
             } else {
                 containerWorkspaces.first()
             }
-            core.session.create(workspace.id, config)
+            core.session.create(workspace.meta.id, config)
         }
 
         core.session.updateTitle(handle.id, title)

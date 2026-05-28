@@ -46,7 +46,7 @@ class ListCommand : Command {
                 appendLine("可用工作区:")
                 workspaces.forEachIndexed { index, ws ->
                     val container = if (ws.meta.inContainer) " [容器]" else " [非容器]"
-                    appendLine("  ${index + 1}. ${ws.meta.name}$container")
+                    appendLine("  ${index + 1}. ${ws.meta.displayName}$container")
                 }
             }
         } catch (e: Exception) {

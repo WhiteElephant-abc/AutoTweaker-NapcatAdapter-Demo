@@ -59,8 +59,8 @@ class WorkspaceCommand : Command {
             appendLine("可用工作区:")
             workspaces.forEachIndexed { index, ws ->
                 val container = if (ws.meta.inContainer) " [容器]" else " [非容器]"
-                val selected = if (ws.id == selectedId) " ← 当前" else ""
-                appendLine("  ${index + 1}. ${ws.meta.name}$container$selected")
+                val selected = if (ws.meta.id == selectedId) " ← 当前" else ""
+                appendLine("  ${index + 1}. ${ws.meta.displayName}$container$selected")
             }
         }
     }
@@ -87,13 +87,13 @@ class WorkspaceCommand : Command {
             workspaces[index - 1]
         } else {
             // 按名称查找
-            workspaces.find { it.meta.name.lowercase().contains(input.lowercase()) }
+            workspaces.find { it.meta.displayName.lowercase().contains(input.lowercase()) }
         }
 
         if (workspace == null) return "未找到工作区: $input"
 
-        context.sessionManager.setUserWorkspace(context.userId, workspace.id)
-        return "已选择工作区: ${workspace.meta.name}"
+        context.sessionManager.setUserWorkspace(context.userId, workspace.meta.id)
+        return "已选择工作区: ${workspace.meta.displayName}"
     }
 
     private fun createWorkspace(context: CommandContext): String {
@@ -124,12 +124,12 @@ class WorkspaceCommand : Command {
 
         return try {
             val meta = WorkspaceMeta(
-                name = name,
+                displayName = name,
                 inContainer = inContainer,
                 path = path
             )
             val workspace = context.core.session.createWorkspace(meta)
-            "工作区已创建: ${workspace.meta.name}\n路径: ${workspace.meta.path}"
+            "工作区已创建: ${workspace.meta.displayName}\n路径: ${workspace.meta.path}"
         } catch (e: Exception) {
             "创建工作区失败: ${e.message}"
         }
@@ -156,14 +156,14 @@ class WorkspaceCommand : Command {
             workspaces[index - 1]
         } else {
             // 按名称查找
-            workspaces.find { it.meta.name.lowercase().contains(input.lowercase()) }
+            workspaces.find { it.meta.displayName.lowercase().contains(input.lowercase()) }
         }
 
         if (workspace == null) return "未找到工作区: $input"
 
         return try {
-            context.core.session.deleteWorkspace(workspace.id)
-            "已删除工作区: ${workspace.meta.name}"
+            context.core.session.deleteWorkspace(workspace.meta.id)
+            "已删除工作区: ${workspace.meta.displayName}"
         } catch (e: Exception) {
             "删除工作区失败: ${e.message}"
         }
