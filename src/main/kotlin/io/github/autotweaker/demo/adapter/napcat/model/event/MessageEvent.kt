@@ -23,6 +23,9 @@ sealed class MessageEvent : OneBotEvent() {
 
     /** 发送者信息 */
     abstract val sender: Sender
+
+    /** 发送者 QQ 号 */
+    @SerialName("user_id") abstract val userId: Long
 }
 
 /**
@@ -45,7 +48,7 @@ data class PrivateMessageEvent(
     override val message: MessageChain,
     @SerialName("raw_message") override val rawMessage: String,
     override val sender: Sender,
-    @SerialName("user_id") val userId: Long
+    @SerialName("user_id") override val userId: Long
 ) : MessageEvent()
 
 /**
@@ -70,5 +73,5 @@ data class GroupMessageEvent(
     @SerialName("raw_message") override val rawMessage: String,
     override val sender: Sender,
     @SerialName("group_id") val groupId: Long,
-    @SerialName("user_id") val userId: Long
+    @SerialName("user_id") override val userId: Long
 ) : MessageEvent()

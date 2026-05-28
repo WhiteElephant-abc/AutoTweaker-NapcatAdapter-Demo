@@ -272,89 +272,77 @@ class MessageBridge(
             contextBuilder.appendLine("<context>")
 
             // 获取消息历史
-            if (groupId != null) {
-                // 群聊：获取群消息历史
-                val history = napCat.getGroupMsgHistory(groupId, count = 20)
+            val messages = if (groupId != null) {
+                napCat.getGroupMsgHistory(groupId, count = 20)
+            } else {
+                napCat.getPrivateMsgHistory(userId, count = 20)
+            }
 
-                // 获取群成员列表用于获取昵称
-                val members = try {
+            // 获取群成员列表用于获取昵称（仅群聊）
+            val members = if (groupId != null) {
+                try {
                     napCat.getGroupMemberList(groupId)
                 } catch (e: Exception) {
                     emptyList()
                 }
+            } else {
+                emptyList()
+            }
 
-                // 收集合并转发消息
-                val forwardMessages = mutableMapOf<String, List<ForwardMessage>>()
+            // 收集合并转发消息
+            val forwardMessages = mutableMapOf<String, List<ForwardMessage>>()
 
-                // 构建消息历史
-                history.reversed().forEach { msg ->
-                    val nickname = members.find { it.userId == msg.userId }?.let {
+            // 构建消息历史
+            messages.reversed().forEach { msg ->
+                val nickname = if (groupId != null) {
+                    members.find { it.userId == msg.userId }?.let {
                         it.card.ifEmpty { it.nickname }
                     } ?: msg.sender.nickname.ifEmpty { msg.sender.userId.toString() }
-                    val time = java.time.Instant.ofEpochSecond(msg.time)
-                        .atZone(java.time.ZoneId.systemDefault())
-                        .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"))
+                } else {
+                    msg.sender.nickname.ifEmpty { msg.sender.userId.toString() }
+                }
+                val time = java.time.Instant.ofEpochSecond(msg.time)
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"))
 
-                    // 检测合并转发消息
-                    val forwardId = extractForwardId(msg.rawMessage)
-                    if (forwardId != null) {
-                        try {
-                            val forwardContent = napCat.getForwardMsg(forwardId)
-                            forwardMessages[forwardId] = forwardContent
-                            contextBuilder.appendLine("[$time] $nickname: [合并转发消息 id=$forwardId]")
-                        } catch (e: Exception) {
-                            logger.warn("Failed to get forward message {}: {}", forwardId, e.message)
-                            contextBuilder.appendLine("[$time] $nickname: ${msg.rawMessage}")
-                        }
-                    } else {
+                // 检测合并转发消息
+                val forwardId = extractForwardId(msg.rawMessage)
+                if (forwardId != null) {
+                    try {
+                        val forwardContent = napCat.getForwardMsg(forwardId)
+                        forwardMessages[forwardId] = forwardContent
+                        contextBuilder.appendLine("[$time] $nickname: [合并转发消息 id=$forwardId]")
+                    } catch (e: Exception) {
+                        logger.warn("Failed to get forward message {}: {}", forwardId, e.message)
                         contextBuilder.appendLine("[$time] $nickname: ${msg.rawMessage}")
                     }
+                } else {
+                    contextBuilder.appendLine("[$time] $nickname: ${msg.rawMessage}")
                 }
+            }
 
-                // 添加合并转发消息内容
-                if (forwardMessages.isNotEmpty()) {
-                    contextBuilder.appendLine()
-                    contextBuilder.appendLine("<forward>")
-                    forwardMessages.forEach { (id, messages) ->
-                        contextBuilder.appendLine("  <forward id=\"$id\">")
-                        messages.forEach { msg ->
-                            val nickname = members.find { it.userId == msg.sender.userId }?.let {
+            // 添加合并转发消息内容
+            if (forwardMessages.isNotEmpty()) {
+                contextBuilder.appendLine()
+                contextBuilder.appendLine("<forward>")
+                forwardMessages.forEach { (id, forwardMsgs) ->
+                    contextBuilder.appendLine("  <forward id=\"$id\">")
+                    forwardMsgs.forEach { msg ->
+                        val nickname = if (groupId != null) {
+                            members.find { it.userId == msg.sender.userId }?.let {
                                 it.card.ifEmpty { it.nickname }
                             } ?: msg.sender.nickname.ifEmpty { msg.sender.userId.toString() }
-                            val time = java.time.Instant.ofEpochSecond(msg.time)
-                                .atZone(java.time.ZoneId.systemDefault())
-                                .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"))
-                            contextBuilder.appendLine("    [$time] $nickname: ${msg.rawMessage}")
+                        } else {
+                            msg.sender.nickname.ifEmpty { msg.sender.userId.toString() }
                         }
-                        contextBuilder.appendLine("  </forward>")
+                        val time = java.time.Instant.ofEpochSecond(msg.time)
+                            .atZone(java.time.ZoneId.systemDefault())
+                            .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"))
+                        contextBuilder.appendLine("    [$time] $nickname: ${msg.rawMessage}")
                     }
-                    contextBuilder.appendLine("</forward>")
+                    contextBuilder.appendLine("  </forward>")
                 }
-            } else {
-                // 私聊：获取私聊消息历史
-                val history = napCat.getPrivateMsgHistory(userId, count = 20)
-
-                // 构建消息历史
-                history.reversed().forEach { msg ->
-                    val nickname = msg.sender.nickname.ifEmpty { msg.sender.userId.toString() }
-                    val time = java.time.Instant.ofEpochSecond(msg.time)
-                        .atZone(java.time.ZoneId.systemDefault())
-                        .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"))
-
-                    // 检测合并转发消息
-                    val forwardId = extractForwardId(msg.rawMessage)
-                    if (forwardId != null) {
-                        try {
-                            val forwardContent = napCat.getForwardMsg(forwardId)
-                            contextBuilder.appendLine("[$time] $nickname: [合并转发消息 id=$forwardId]")
-                        } catch (e: Exception) {
-                            logger.warn("Failed to get forward message {}: {}", forwardId, e.message)
-                            contextBuilder.appendLine("[$time] $nickname: ${msg.rawMessage}")
-                        }
-                    } else {
-                        contextBuilder.appendLine("[$time] $nickname: ${msg.rawMessage}")
-                    }
-                }
+                contextBuilder.appendLine("</forward>")
             }
 
             contextBuilder.appendLine("</context>")
