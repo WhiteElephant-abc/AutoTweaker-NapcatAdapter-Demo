@@ -1,8 +1,11 @@
 package io.github.autotweaker.demo.adapter.napcat.model.message
 
-import kotlinx.serialization.SerialName
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.*
 
 /**
  * 消息链类型，由多个 [MessageSegment] 组成
@@ -12,125 +15,191 @@ typealias MessageChain = List<MessageSegment>
 /**
  * OneBot 11 消息段
  *
- * 消息内容由多个消息段组成，每个消息段代表一种类型的内容（文本、图片、@等）。
- * 使用密封类确保类型安全的序列化/反序列化。
+ * 使用密封接口定义类型安全的消息段，匹配 NapCat 的 `{"type":"xxx","data":{...}}` 格式。
  */
-@Serializable
-sealed class MessageSegment {
-    /**
-     * 文本消息段
-     *
-     * @property text 文本内容
-     */
+@Serializable(with = MessageSegmentSerializer::class)
+sealed interface MessageSegment {
+    /** 文本消息段 */
     @Serializable
-    @SerialName("text")
-    data class Text(val text: String) : MessageSegment()
+    data class Text(val text: String) : MessageSegment
 
-    /**
-     * @消息段
-     *
-     * @property qq 被@的 QQ 号，"all" 表示@全体成员
-     */
+    /** @消息段 */
     @Serializable
-    @SerialName("at")
-    data class At(val qq: String) : MessageSegment()
+    data class At(val qq: String? = null) : MessageSegment
 
-    /**
-     * 图片消息段
-     *
-     * @property file 图片文件 ID
-     * @property url 图片 URL
-     * @property subType 图片子类型
-     */
+    /** 图片消息段 */
     @Serializable
-    @SerialName("image")
     data class Image(
         val file: String,
         val url: String? = null,
-        @SerialName("sub_type") val subType: Int? = null
-    ) : MessageSegment()
+        @Serializable(with = FlexibleIntSerializer::class) @JvmField val subType: Int? = null
+    ) : MessageSegment
 
-    /**
-     * 表情消息段
-     *
-     * @property id 表情 ID
-     */
+    /** 表情消息段 */
     @Serializable
-    @SerialName("face")
-    data class Face(val id: Int) : MessageSegment()
+    data class Face(@Serializable(with = FlexibleIntSerializer::class) val id: Int) : MessageSegment
 
-    /**
-     * 回复消息段
-     *
-     * @property id 被回复的消息 ID
-     */
+    /** 回复消息段 */
     @Serializable
-    @SerialName("reply")
-    data class Reply(val id: Int) : MessageSegment()
+    data class Reply(@Serializable(with = FlexibleIntSerializer::class) val id: Int) : MessageSegment
 
-    /**
-     * JSON 消息段（卡片消息）
-     *
-     * @property data JSON 数据字符串
-     */
+    /** JSON 消息段（卡片消息） */
     @Serializable
-    @SerialName("json")
-    data class Json(val data: String) : MessageSegment()
+    data class JsonMsg(val data: String) : MessageSegment
 
-    /**
-     * 语音消息段
-     *
-     * @property file 语音文件 ID
-     */
+    /** 语音消息段 */
     @Serializable
-    @SerialName("record")
-    data class Record(val file: String) : MessageSegment()
+    data class Record(val file: String) : MessageSegment
 
-    /**
-     * 视频消息段
-     *
-     * @property file 视频文件 ID
-     */
+    /** 视频消息段 */
     @Serializable
-    @SerialName("video")
-    data class Video(val file: String) : MessageSegment()
+    data class Video(val file: String) : MessageSegment
 
-    /**
-     * 合并转发消息节点
-     *
-     * @property userId 发送者 QQ 号
-     * @property nickname 发送者昵称
-     * @property content 节点内容
-     */
+    /** 合并转发消息节点 */
     @Serializable
-    @SerialName("node")
     data class Node(
-        @SerialName("user_id") val userId: String,
-        val nickname: String,
-        val content: JsonElement? = null
-    ) : MessageSegment()
+        @Serializable(with = FlexibleStringSerializer::class) @JvmField val userId: String,
+        val nickname: String
+    ) : MessageSegment
 
-    /**
-     * 戳一戳消息段
-     *
-     * @property type 戳一戳类型
-     * @property id 戳一戳 ID
-     */
+    /** 戳一戳消息段 */
     @Serializable
-    @SerialName("poke")
-    data class Poke(val type: String, val id: String) : MessageSegment()
+    data class Poke(val type: String, val id: String) : MessageSegment
 
-    /**
-     * 未知类型消息段
-     *
-     * 用于处理未识别的消息段类型，避免反序列化失败。
-     *
-     * @property type 消息段类型
-     * @property data 原始数据
-     */
-    @Serializable
-    data class Unknown(
-        val type: String,
-        val data: JsonElement? = null
-    ) : MessageSegment()
+    /** 未知类型消息段 */
+    data class Unknown(val type: String) : MessageSegment
+}
+
+/**
+ * MessageSegment 自定义序列化器
+ *
+ * 处理 NapCat 的嵌套格式 `{"type":"xxx","data":{...}}`
+ */
+object MessageSegmentSerializer : KSerializer<MessageSegment> {
+    override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+    override fun deserialize(decoder: Decoder): MessageSegment {
+        val json = decoder.decodeSerializableValue(JsonObject.serializer())
+        val type = json["type"]?.jsonPrimitive?.content ?: return MessageSegment.Unknown("unknown")
+        val data = json["data"]?.jsonObject ?: JsonObject(emptyMap())
+
+        return when (type) {
+            "text" -> MessageSegment.Text(data["text"]?.jsonPrimitive?.content ?: "")
+            "at" -> MessageSegment.At(data["qq"]?.jsonPrimitive?.contentOrNull)
+            "image" -> MessageSegment.Image(
+                file = data["file"]?.jsonPrimitive?.content ?: "",
+                url = data["url"]?.jsonPrimitive?.contentOrNull,
+                subType = data["sub_type"]?.jsonPrimitive?.intOrNull
+            )
+            "face" -> MessageSegment.Face(data["id"]?.jsonPrimitive?.int ?: 0)
+            "reply" -> MessageSegment.Reply(data["id"]?.jsonPrimitive?.int ?: 0)
+            "json" -> MessageSegment.JsonMsg(data["data"]?.jsonPrimitive?.content ?: "")
+            "record" -> MessageSegment.Record(data["file"]?.jsonPrimitive?.content ?: "")
+            "video" -> MessageSegment.Video(data["file"]?.jsonPrimitive?.content ?: "")
+            "node" -> MessageSegment.Node(
+                userId = data["user_id"]?.jsonPrimitive?.content ?: "",
+                nickname = data["nickname"]?.jsonPrimitive?.content ?: ""
+            )
+            "poke" -> MessageSegment.Poke(
+                type = data["type"]?.jsonPrimitive?.content ?: "",
+                id = data["id"]?.jsonPrimitive?.content ?: ""
+            )
+            else -> MessageSegment.Unknown(type)
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: MessageSegment) {
+        val json = when (value) {
+            is MessageSegment.Text -> buildJsonObject {
+                put("type", "text")
+                putJsonObject("data") { put("text", value.text) }
+            }
+            is MessageSegment.At -> buildJsonObject {
+                put("type", "at")
+                putJsonObject("data") { put("qq", value.qq ?: "all") }
+            }
+            is MessageSegment.Image -> buildJsonObject {
+                put("type", "image")
+                putJsonObject("data") {
+                    put("file", value.file)
+                    value.url?.let { put("url", it) }
+                    value.subType?.let { put("sub_type", it) }
+                }
+            }
+            is MessageSegment.Face -> buildJsonObject {
+                put("type", "face")
+                putJsonObject("data") { put("id", value.id) }
+            }
+            is MessageSegment.Reply -> buildJsonObject {
+                put("type", "reply")
+                putJsonObject("data") { put("id", value.id) }
+            }
+            is MessageSegment.JsonMsg -> buildJsonObject {
+                put("type", "json")
+                putJsonObject("data") { put("data", value.data) }
+            }
+            is MessageSegment.Record -> buildJsonObject {
+                put("type", "record")
+                putJsonObject("data") { put("file", value.file) }
+            }
+            is MessageSegment.Video -> buildJsonObject {
+                put("type", "video")
+                putJsonObject("data") { put("file", value.file) }
+            }
+            is MessageSegment.Node -> buildJsonObject {
+                put("type", "node")
+                putJsonObject("data") {
+                    put("user_id", value.userId)
+                    put("nickname", value.nickname)
+                }
+            }
+            is MessageSegment.Poke -> buildJsonObject {
+                put("type", "poke")
+                putJsonObject("data") {
+                    put("type", value.type)
+                    put("id", value.id)
+                }
+            }
+            is MessageSegment.Unknown -> buildJsonObject {
+                put("type", value.type)
+            }
+        }
+        encoder.encodeSerializableValue(JsonObject.serializer(), json)
+    }
+}
+
+/**
+ * 灵活的 Int 序列化器
+ *
+ * 处理 NapCat 可能返回字符串或数字的情况
+ */
+object FlexibleIntSerializer : KSerializer<Int> {
+    override val descriptor = JsonPrimitive.serializer().descriptor
+
+    override fun deserialize(decoder: Decoder): Int {
+        val element = decoder.decodeSerializableValue(JsonPrimitive.serializer())
+        return element.intOrNull ?: element.content.toIntOrNull() ?: 0
+    }
+
+    override fun serialize(encoder: Encoder, value: Int) {
+        encoder.encodeInt(value)
+    }
+}
+
+/**
+ * 灵活的 String 序列化器
+ *
+ * 处理 NapCat 可能返回数字或字符串的情况
+ */
+object FlexibleStringSerializer : KSerializer<String> {
+    override val descriptor = JsonPrimitive.serializer().descriptor
+
+    override fun deserialize(decoder: Decoder): String {
+        val element = decoder.decodeSerializableValue(JsonPrimitive.serializer())
+        return element.content
+    }
+
+    override fun serialize(encoder: Encoder, value: String) {
+        encoder.encodeString(value)
+    }
 }

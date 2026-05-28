@@ -121,6 +121,7 @@ class NapCatWsClientImpl(
     }
 
     private suspend fun handleMessage(text: String) {
+        logger.debug("Received: {}", text)
         try {
             val jsonElement = json.parseToJsonElement(text)
             val obj = jsonElement.jsonObject
@@ -246,6 +247,7 @@ class NapCatWsClientImpl(
             put("echo", echo)
         }
 
+        logger.debug("Sending: {}", request)
         val channel = Channel<JsonObject>(1)
         pendingRequests[echo] = channel
 

@@ -20,6 +20,24 @@ class HelpCommand(private val registry: CommandRegistry) : Command {
     override suspend fun execute(context: CommandContext): String {
         val role = context.role ?: return "未授权"
 
+        // 如果有参数，显示指定命令的详细用法
+        if (context.args.isNotEmpty()) {
+            val commandName = context.args[0].removePrefix("/")
+            val cmd = registry.getCommand(commandName)
+            if (cmd == null) {
+                return "未知命令: $commandName"
+            }
+            if (role.ordinal > cmd.requiredRole.ordinal) {
+                return "权限不足，需要 ${cmd.requiredRole.name} 角色"
+            }
+            return buildString {
+                appendLine("/${cmd.name} - ${cmd.description}")
+                appendLine()
+                appendLine("用法: ${cmd.usage}")
+            }
+        }
+
+        // 否则显示所有命令列表
         val commands = registry.listCommands()
             .filter { role.ordinal <= it.requiredRole.ordinal }
             .sortedBy { it.name }
