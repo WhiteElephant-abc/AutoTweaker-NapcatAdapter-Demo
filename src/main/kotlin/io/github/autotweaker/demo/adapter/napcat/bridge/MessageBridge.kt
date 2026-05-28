@@ -2,6 +2,8 @@ package io.github.autotweaker.demo.adapter.napcat.bridge
 
 import io.github.autotweaker.api.adapter.CoreAPI
 import io.github.autotweaker.api.types.session.SessionContext
+import io.github.autotweaker.api.types.session.SessionContextIndex
+import io.github.autotweaker.api.types.session.SessionMessage
 import io.github.autotweaker.api.types.session.SessionOutput
 import io.github.autotweaker.demo.adapter.napcat.api.NapCatApi
 import io.github.autotweaker.demo.adapter.napcat.command.CommandContext
@@ -26,6 +28,7 @@ import java.util.concurrent.ConcurrentHashMap
  * - 分发命令到 CommandRegistry
  * - 转发普通消息到活跃会话
  * - 监听会话输出，发送回复到 NapCat
+ * - 监听会话上下文变化，发送新增 AI 消息
  *
  * @property core CoreAPI 实例
  * @property napCat NapCat API 实例
@@ -56,6 +59,9 @@ class MessageBridge(
 
     /** 会话 → 最新消息时间戳，用于过滤古早消息 */
     private val lastMessageTimestamps = ConcurrentHashMap<UUID, Long>()
+
+    /** 会话 → 上次上下文消息 ID 集合，用于检测新增消息 */
+    private val lastMessageIds = ConcurrentHashMap<UUID, Set<UUID>>()
 
     /**
      * 消息发送上下文
@@ -139,16 +145,6 @@ class MessageBridge(
 
     /**
      * 从消息链中提取 @bot 后的文本
-     *
-     * 检测规则：
-     * 1. 第一个消息段必须是 At 类型
-     * 2. At.qq 必须等于机器人 QQ 号
-     * 3. 提取后续所有 Text 段的文本拼接
-     * 4. 空文本返回 null（忽略纯 @bot 消息）
-     *
-     * @param message 消息链
-     * @param selfId 机器人 QQ 号
-     * @return 提取的文本，未 @bot 或文本为空返回 null
      */
     private fun extractAtText(message: List<MessageSegment>, selfId: Long): String? {
         if (message.isEmpty()) return null
@@ -157,13 +153,11 @@ class MessageBridge(
         if (first !is MessageSegment.At) return null
         if (first.qq != selfId.toString()) return null
 
-        // 提取后续文本段
         val text = message.drop(1)
             .filterIsInstance<MessageSegment.Text>()
             .joinToString("") { it.text }
             .trim()
 
-        // 空文本（纯 @bot）返回 null
         return text.ifEmpty { null }
     }
 
@@ -212,8 +206,6 @@ class MessageBridge(
 
     /**
      * 确保会话的输出和上下文监听器已启动
-     *
-     * @param sessionId 会话 ID
      */
     private fun ensureListeners(sessionId: UUID) {
         val handle = core.session.getHandle(sessionId) ?: return
@@ -250,9 +242,7 @@ class MessageBridge(
                     sessionOutput.delta.content?.let { buffer.append(it) }
                 }
                 is SessionOutput.ToolRequest -> {
-                    // 有工具请求，先发送已收集的文本
                     flushBuffer(sessionId, buffer)
-                    // 发送工具审批提示
                     val prompt = buildString {
                         appendLine("工具调用请求:")
                         sessionOutput.requests.forEachIndexed { index, req ->
@@ -279,11 +269,9 @@ class MessageBridge(
                     // 丢弃流式输出 (OUTPUTTING)，只处理完成状态
                     if (sessionOutput.output.status == io.github.autotweaker.api.types.agent.CompactOutput.Status.FINISHED) {
                         flushBuffer(sessionId, buffer)
-                        // 压缩完成，发送消息总数提示
                         val messageCount = getMessageCount(sessionId)
                         sendToSession(sessionId, "上下文已压缩，剩余 $messageCount 条消息")
                     }
-                    // OUTPUTTING 和 FAILED 状态丢弃
                 }
             }
         }
@@ -292,38 +280,89 @@ class MessageBridge(
     /**
      * 监听会话上下文变化
      *
-     * 当上下文更新时，检查是否有新的消息需要发送。
+     * 当上下文更新时，检测新增的 AI 消息并发送。
      * 通过时间戳过滤，避免发送古早消息。
      */
     private suspend fun listenToContext(sessionId: UUID, context: StateFlow<SessionContext>) {
         context.collect { sessionContext ->
+            val currentIds = getAllMessageIds(sessionContext.index)
+            val previousIds = lastMessageIds[sessionId] ?: emptySet()
             val lastTimestamp = lastMessageTimestamps[sessionId] ?: 0L
             val currentTime = System.currentTimeMillis()
 
-            // 如果距离上次消息超过 5 秒，可能是上下文更新而非新消息
-            // 这里我们只记录日志，实际的消息发送由 output 监听处理
-            if (currentTime - lastTimestamp > 5000) {
-                logger.debug("Session {} context updated, but no recent message activity", sessionId)
+            // 找出新增的消息 ID
+            val newIds = currentIds - previousIds
+            if (newIds.isNotEmpty() && currentTime - lastTimestamp < 5000) {
+                // 加载新增消息
+                val messages = core.session.loadMessages(newIds.toList())
+                if (messages != null) {
+                    // 只发送 AI/Assistant 消息，过滤掉用户消息和工具消息
+                    val aiMessages = messages.filterIsInstance<SessionMessage.Assistant>()
+                    for (msg in aiMessages) {
+                        msg.content?.let { sendToSession(sessionId, it) }
+                    }
+                }
             }
+
+            // 更新状态
+            lastMessageIds[sessionId] = currentIds
         }
     }
 
     /**
+     * 从 SessionContextIndex 提取所有消息 ID
+     */
+    private fun getAllMessageIds(index: SessionContextIndex): Set<UUID> {
+        val ids = mutableSetOf<UUID>()
+
+        // historyRounds 中的消息
+        index.historyRounds?.forEach { round ->
+            ids.add(round.userMessage)
+            round.turns?.forEach { turn ->
+                ids.add(turn.assistantMessage)
+                turn.tools.forEach { tool ->
+                    ids.add(tool.call)
+                    ids.add(tool.result)
+                }
+            }
+            round.finalAssistantMessage?.let { ids.add(it) }
+        }
+
+        // currentRound 中的消息
+        index.currentRound?.let { round ->
+            ids.add(round.userMessage)
+            round.turns?.forEach { turn ->
+                ids.add(turn.assistantMessage)
+                turn.tools.forEach { tool ->
+                    ids.add(tool.call)
+                    ids.add(tool.result)
+                }
+            }
+            round.assistantMessage?.let { ids.add(it) }
+            round.pendingToolCalls?.let { ids.addAll(it) }
+        }
+
+        // summarizedMessage
+        index.summarizedMessage?.let { ids.add(it) }
+
+        return ids
+    }
+
+    /**
      * 获取会话中的消息总数
-     *
-     * 根据 SessionContextIndex 计算 historyRounds + currentRound 的消息数。
-     *
-     * @param sessionId 会话 ID
-     * @return 消息总数
      */
     private fun getMessageCount(sessionId: UUID): Int {
         val handle = core.session.getHandle(sessionId) ?: return 0
         val context = handle.context.value
-        val index = context.index
+        return getMessageCountFromIndex(context.index)
+    }
 
+    /**
+     * 从 SessionContextIndex 计算消息总数
+     */
+    private fun getMessageCountFromIndex(index: SessionContextIndex): Int {
         var count = 0
 
-        // 计算 historyRounds 中的消息数
         index.historyRounds?.forEach { round ->
             count++ // userMessage
             round.turns?.forEach { turn ->
@@ -333,7 +372,6 @@ class MessageBridge(
             if (round.finalAssistantMessage != null) count++
         }
 
-        // 计算 currentRound 中的消息数
         index.currentRound?.let { round ->
             count++ // userMessage
             round.turns?.forEach { turn ->
