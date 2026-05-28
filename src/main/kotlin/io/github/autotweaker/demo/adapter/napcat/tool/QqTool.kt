@@ -430,7 +430,12 @@ class QqTool : Tool {
                 else -> return Tool.ToolOutput("未知函数: ${input.functionName}", false)
             }
 
-            Tool.ToolOutput(json.encodeToString(result), true)
+            val output = when (result) {
+                is Unit -> "ok"
+                is String -> result
+                else -> result.toString()
+            }
+            Tool.ToolOutput(output, true)
         } catch (e: Exception) {
             Tool.ToolOutput("执行失败: ${e.message}", false)
         }
