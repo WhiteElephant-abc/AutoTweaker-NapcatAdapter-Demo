@@ -3,8 +3,10 @@ package io.github.autotweaker.demo.adapter.napcat.tool
 import com.google.auto.service.AutoService
 import io.github.autotweaker.api.tool.Tool
 import io.github.autotweaker.demo.adapter.napcat.NapCatAdapter
+import io.github.autotweaker.demo.adapter.napcat.api.NapCatApi
 import io.github.autotweaker.demo.adapter.napcat.model.message.MessageSegment
 import kotlinx.serialization.json.*
+import org.slf4j.LoggerFactory
 
 /**
  * QQ 工具
@@ -314,11 +316,40 @@ class QqTool : Tool {
         )
     )
 
+    private val logger = LoggerFactory.getLogger(QqTool::class.java)
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
+
+    /**
+     * 获取 NapCatApi 实例
+     *
+     * 由于核心对 Adapter 和 Tool 使用不同的类加载器加载，
+     * companion object 的静态字段在两个类加载器中是隔离的。
+     * 此方法先尝试直接访问，失败后通过 ServiceLoader 查找 adapter 实例，
+     * 再用反射读取 _napCatApi 字段。
+     */
+    private fun resolveApi(): NapCatApi {
+        val toolCl = QqTool::class.java.classLoader
+        val adapterCl = NapCatAdapter::class.java.classLoader
+        val sameCl = toolCl === adapterCl
+        logger.info("resolveApi: Tool CL={}, Adapter CL={}, same={}", toolCl, adapterCl, sameCl)
+
+        try {
+            return NapCatAdapter.napCatApi
+        } catch (e: Exception) {
+            val hasCore = try { NapCatAdapter.core; true } catch (_: Exception) { false }
+            logger.error(
+                "NapCatApi 不可用: {}, Tool CL={}, Adapter CL={}, same={}, core={}",
+                e.message, toolCl, adapterCl, sameCl, hasCore
+            )
+            throw IllegalStateException(
+                "NapCatApi 不可用: ${e.message} (sameCL=$sameCl, core=$hasCore)"
+            )
+        }
+    }
 
     override suspend fun execute(input: Tool.ToolInput): Tool.ToolOutput {
         return try {
-            val api = NapCatAdapter.napCatApi
+            val api = resolveApi()
             val args = input.arguments
 
             val result = when (input.functionName) {

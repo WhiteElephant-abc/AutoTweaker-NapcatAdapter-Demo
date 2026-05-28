@@ -128,6 +128,7 @@ class NapCatAdapter : Adapter {
 
         // 提前暴露 API 实例，供 Tool 使用
         _napCatApi = client
+        logger.info("_napCatApi set, classloader={}", NapCatAdapter::class.java.classLoader)
 
         // 初始化消息桥接，传入适配器级协程作用域
         val scope = adapterScope!!
