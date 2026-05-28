@@ -185,17 +185,61 @@ class MessageBridge(
         pendingToolCalls.remove(handle.id)
 
         try {
+            // 处理当前消息中的合并转发
+            val processedText = processForwardInText(text)
+
             // 构建带上下文的消息
             val messageWithContext = if (groupId != null) {
-                buildMessageWithContext(groupId, userId, text)
+                buildMessageWithContext(groupId, userId, processedText)
             } else {
-                text
+                processedText
             }
             core.session.send(handle.id, messageWithContext)
         } catch (e: Exception) {
             logger.error("Failed to send message to session {}", handle.id, e)
             sendReply(groupId, userId, "发送失败: ${e.message}")
         }
+    }
+
+    /**
+     * 处理文本中的合并转发消息
+     *
+     * 检测 [CQ:forward,id=xxx] 并获取实际内容
+     */
+    private suspend fun processForwardInText(text: String): String {
+        val pattern = "\\[CQ:forward,id=(\\d+)\\]".toRegex()
+        val matches = pattern.findAll(text).toList()
+        if (matches.isEmpty()) return text
+
+        val result = StringBuilder(text)
+        var offset = 0
+        matches.forEach { match ->
+            val forwardId = match.groupValues[1]
+            try {
+                val forwardContent = napCat.getForwardMsg(forwardId)
+                if (forwardContent.isNotEmpty()) {
+                    val forwardText = buildString {
+                        appendLine("<forward id=\"$forwardId\">")
+                        forwardContent.forEach { msg ->
+                            val nickname = msg.sender.nickname.ifEmpty { msg.sender.userId.toString() }
+                            val time = java.time.Instant.ofEpochSecond(msg.time)
+                                .atZone(java.time.ZoneId.systemDefault())
+                                .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"))
+                            appendLine("  [$time] $nickname: ${msg.rawMessage}")
+                        }
+                        append("</forward>")
+                    }
+                    // 替换 CQ 码为实际内容
+                    val start = match.range.first + offset
+                    val end = match.range.last + 1 + offset
+                    result.replace(start, end, forwardText)
+                    offset += forwardText.length - (end - start)
+                }
+            } catch (e: Exception) {
+                logger.warn("Failed to get forward message {}: {}", forwardId, e.message)
+            }
+        }
+        return result.toString()
     }
 
     /**
