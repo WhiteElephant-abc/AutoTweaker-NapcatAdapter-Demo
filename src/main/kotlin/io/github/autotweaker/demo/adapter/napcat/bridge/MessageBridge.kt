@@ -246,6 +246,13 @@ class MessageBridge(
     }
 
     /**
+     * 获取待审批工具调用数量
+     */
+    fun getPendingCount(sessionId: UUID): Int {
+        return pendingToolCalls[sessionId]?.size ?: 0
+    }
+
+    /**
      * 获取待审批工具调用的 callId
      *
      * @param sessionId 会话 ID

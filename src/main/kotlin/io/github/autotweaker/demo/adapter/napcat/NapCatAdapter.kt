@@ -104,6 +104,7 @@ class NapCatAdapter : Adapter {
             register(ExitCommand())
             register(SessionCommand())
             register(ApproveCommand())
+            register(RejectCommand())
             register(OperatorCommand())
             register(ModelCommand())
             register(WorkspaceCommand())
