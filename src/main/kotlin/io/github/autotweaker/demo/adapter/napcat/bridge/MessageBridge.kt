@@ -318,11 +318,9 @@ class MessageBridge(
                 is SessionOutput.Tool -> { /* 丢弃 */ }
 
                 is SessionOutput.ToolRequest -> {
-                    // 合并新的 callId 到已有列表（不覆盖）
-                    val newCallIds = sessionOutput.requests.map { it.callId }
-                    pendingToolCalls.merge(sessionId, newCallIds) { old, new ->
-                        (old + new).distinct()
-                    }
+                    // 覆盖为当前待审批的 callId 列表
+                    val callIds = sessionOutput.requests.map { it.callId }
+                    pendingToolCalls[sessionId] = callIds
 
                     val prompt = buildString {
                         appendLine("工具调用请求:")
