@@ -1,5 +1,7 @@
 package io.github.autotweaker.demo.adapter.napcat.command.commands
 
+import io.github.autotweaker.api.types.config.CoreConfig
+import io.github.autotweaker.api.types.llm.ModelData
 import io.github.autotweaker.demo.adapter.napcat.command.Command
 import io.github.autotweaker.demo.adapter.napcat.command.CommandContext
 import io.github.autotweaker.demo.adapter.napcat.permission.Role
@@ -14,6 +16,8 @@ import java.util.UUID
  *   /model set <名称|序号> - 设置自己的主模型
  *
  * 操作员权限：
+ *   /model create <提供商名称> <模型ID> <显示名称> - 创建模型
+ *   /model delete <显示名称|序号> - 删除模型
  *   /model fallback add <名称|序号> - 添加全局备选模型
  *   /model fallback remove <名称|序号> - 移除全局备选模型
  *   /model summarize <名称|序号> - 设置全局压缩模型
@@ -22,7 +26,7 @@ class ModelCommand : Command {
 
     override val name = "model"
     override val description = "管理模型配置"
-    override val usage = "/model [list|set|fallback|summarize] [参数]"
+    override val usage = "/model [list|create|delete|set|fallback|summarize] [参数]"
     override val requiredRole = Role.USER
 
     override suspend fun execute(context: CommandContext): String {
@@ -31,7 +35,9 @@ class ModelCommand : Command {
         }
 
         return when (context.args[0].lowercase()) {
-            "list" -> listModels(context)
+            "list", "ls" -> listModels(context)
+            "create", "add" -> createModel(context)
+            "delete", "rm", "remove" -> deleteModel(context)
             "set" -> setUserPrimaryModel(context)
             "fallback" -> handleFallback(context)
             "summarize" -> setSummarizeModel(context)
@@ -77,6 +83,101 @@ class ModelCommand : Command {
                 } ?: "未知"
                 appendLine("  ${index + 1}. [$provider] ${model.data.displayName}$marker")
             }
+        }
+    }
+
+    private suspend fun createModel(context: CommandContext): String {
+        // 创建模型需要操作员权限
+        val role = context.role
+        if (role == null || role.ordinal > Role.OPERATOR.ordinal) {
+            return "权限不足，需要操作员角色"
+        }
+
+        if (context.args.size < 4) {
+            return "用法: /model create <提供商名称> <模型ID> <显示名称>"
+        }
+
+        val providerName = context.args[1]
+        val modelId = context.args[2]
+        val displayName = context.args[3]
+
+        // 检查模型名称是否已存在
+        val existingModels = context.core.config.listModels()
+        if (existingModels.any { it.data.displayName.equals(displayName, ignoreCase = true) }) {
+            return "模型名称已存在: $displayName"
+        }
+
+        // 查找提供商
+        val provider = context.core.config.listProviders()
+            .find { it.displayName.equals(providerName, ignoreCase = true) }
+            ?: return "未找到提供商: $providerName"
+
+        // 获取提供商元数据
+        val providerMeta = try {
+            context.core.config.getProviderMeta(provider.type)
+        } catch (e: Exception) {
+            return "获取提供商元数据失败: ${e.message}"
+        }
+
+        // 从提供商元数据中查找模型
+        val modelInfo = providerMeta.models.find { it.modelId == modelId }
+            ?: return buildString {
+                appendLine("提供商 $providerName 不支持模型 $modelId")
+                appendLine()
+                appendLine("可用模型:")
+                providerMeta.models.forEach { model ->
+                    appendLine("  - ${model.modelId}")
+                }
+            }
+
+        // 创建模型
+        return try {
+            val model = CoreConfig.ProviderConfig.Model(
+                data = ModelData(
+                    id = UUID.randomUUID(),
+                    displayName = displayName,
+                    modelInfo = modelInfo,
+                    providerId = provider.id
+                )
+            )
+            context.core.config.addModel(model)
+            "模型已创建: $displayName\n提供商: $providerName\n模型ID: $modelId"
+        } catch (e: Exception) {
+            "创建模型失败: ${e.message}"
+        }
+    }
+
+    private suspend fun deleteModel(context: CommandContext): String {
+        // 删除模型需要操作员权限
+        val role = context.role
+        if (role == null || role.ordinal > Role.OPERATOR.ordinal) {
+            return "权限不足，需要操作员角色"
+        }
+
+        if (context.args.size < 2) {
+            return "用法: /model delete <显示名称|序号>"
+        }
+
+        val input = context.args[1]
+        val models = context.core.config.listModels()
+        if (models.isEmpty()) return "没有已配置的模型"
+
+        // 按序号查找
+        val index = input.toIntOrNull()
+        val model = if (index != null && index in 1..models.size) {
+            models[index - 1]
+        } else {
+            // 按名称查找
+            models.find { it.data.displayName.equals(input, ignoreCase = true) }
+        }
+
+        if (model == null) return "未找到模型: $input"
+
+        return try {
+            context.core.config.removeModel(model.data.id)
+            "已删除模型: ${model.data.displayName}"
+        } catch (e: Exception) {
+            "删除模型失败: ${e.message}"
         }
     }
 

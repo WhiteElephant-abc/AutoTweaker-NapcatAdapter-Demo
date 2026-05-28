@@ -84,6 +84,13 @@ class SessionManager(
         return core.session.getHandle(sessionId)
     }
 
+    /**
+     * 获取所有活跃会话
+     *
+     * @return Map<userId, sessionId> 活跃会话映射
+     */
+    fun getAllActiveSessions(): Map<Long, UUID> = HashMap(activeSessions)
+
     // ==================== 用户主模型（每用户隔离） ====================
 
     /**

@@ -102,7 +102,7 @@ class NapCatAdapter : Adapter {
             register(NewCommand())
             register(EnterCommand())
             register(ExitCommand())
-            register(ListCommand())
+            register(SessionCommand())
             register(ApproveCommand())
             register(OperatorCommand())
             register(ModelCommand())

@@ -31,6 +31,7 @@ class WorkspaceCommand : Command {
         }
 
         return when (context.args[0].lowercase()) {
+            "list", "ls" -> listWorkspaces(context)
             "select" -> selectWorkspace(context)
             "create" -> createWorkspace(context)
             "delete" -> deleteWorkspace(context)
@@ -110,6 +111,12 @@ class WorkspaceCommand : Command {
         val name = context.args[1]
         val pathStr = context.args[2]
         val inContainer = context.args.getOrNull(3)?.lowercase() == "container"
+
+        // 检查工作区名称是否已存在
+        val existingWorkspaces = context.core.session.listWorkspaces()
+        if (existingWorkspaces.any { it.meta.displayName.equals(name, ignoreCase = true) }) {
+            return "工作区名称已存在: $name"
+        }
 
         val path = try {
             Paths.get(pathStr)
