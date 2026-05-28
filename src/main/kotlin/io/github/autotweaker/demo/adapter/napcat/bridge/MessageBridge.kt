@@ -268,12 +268,12 @@ class MessageBridge(
             contextBuilder.appendLine("</session-info>")
             contextBuilder.appendLine()
 
+            // 构建上下文
+            contextBuilder.appendLine("<context>")
+
             // 群聊时获取最近的群消息历史
             if (groupId != null) {
                 val history = napCat.getGroupMsgHistory(groupId, count = 20)
-
-                // 构建上下文
-                contextBuilder.appendLine("<context>")
 
                 // 获取群成员列表用于获取昵称
                 val members = try {
@@ -329,11 +329,10 @@ class MessageBridge(
                     }
                     contextBuilder.appendLine("</forward>")
                 }
-
-                contextBuilder.appendLine("</context>")
-                contextBuilder.appendLine()
             }
 
+            contextBuilder.appendLine("</context>")
+            contextBuilder.appendLine()
             contextBuilder.appendLine("<environment>用户所在平台：QQ，请注意输出格式</environment>")
             contextBuilder.appendLine()
             contextBuilder.append(text)
