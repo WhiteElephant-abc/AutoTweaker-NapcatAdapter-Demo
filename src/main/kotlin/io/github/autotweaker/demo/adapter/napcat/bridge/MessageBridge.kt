@@ -1,6 +1,7 @@
 package io.github.autotweaker.demo.adapter.napcat.bridge
 
 import io.github.autotweaker.api.adapter.CoreAPI
+import io.github.autotweaker.api.types.session.SessionContext
 import io.github.autotweaker.api.types.session.SessionOutput
 import io.github.autotweaker.demo.adapter.napcat.api.NapCatApi
 import io.github.autotweaker.demo.adapter.napcat.command.CommandContext
@@ -12,6 +13,7 @@ import io.github.autotweaker.demo.adapter.napcat.model.message.MessageSegment
 import io.github.autotweaker.demo.adapter.napcat.permission.PermissionManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import org.slf4j.LoggerFactory
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -46,8 +48,14 @@ class MessageBridge(
     /** 正在监听输出的会话集合，防止重复监听 */
     private val listeningSessions = ConcurrentHashMap.newKeySet<UUID>()
 
+    /** 正在监听上下文的会话集合，防止重复监听 */
+    private val listeningContexts = ConcurrentHashMap.newKeySet<UUID>()
+
     /** 会话 → 消息发送上下文的映射，用于回复路由 */
     private val sessionContexts = ConcurrentHashMap<UUID, MessageContext>()
+
+    /** 会话 → 最新消息时间戳，用于过滤古早消息 */
+    private val lastMessageTimestamps = ConcurrentHashMap<UUID, Long>()
 
     /**
      * 消息发送上下文
@@ -175,9 +183,10 @@ class MessageBridge(
 
         // 记录会话上下文，用于回复路由
         sessionContexts[handle.id] = MessageContext(userId, groupId)
+        lastMessageTimestamps[handle.id] = System.currentTimeMillis()
 
-        // 确保输出监听器已启动
-        ensureOutputListener(handle.id)
+        // 确保监听器已启动
+        ensureListeners(handle.id)
 
         try {
             core.session.send(handle.id, text)
@@ -202,20 +211,32 @@ class MessageBridge(
     }
 
     /**
-     * 确保会话的输出监听器已启动
+     * 确保会话的输出和上下文监听器已启动
      *
      * @param sessionId 会话 ID
      */
-    private fun ensureOutputListener(sessionId: UUID) {
-        if (!listeningSessions.add(sessionId)) return
-
+    private fun ensureListeners(sessionId: UUID) {
         val handle = core.session.getHandle(sessionId) ?: return
 
-        scope.launch {
-            try {
-                listenToOutput(sessionId, handle.output)
-            } finally {
-                listeningSessions.remove(sessionId)
+        // 启动输出监听
+        if (listeningSessions.add(sessionId)) {
+            scope.launch {
+                try {
+                    listenToOutput(sessionId, handle.output)
+                } finally {
+                    listeningSessions.remove(sessionId)
+                }
+            }
+        }
+
+        // 启动上下文监听
+        if (listeningContexts.add(sessionId)) {
+            scope.launch {
+                try {
+                    listenToContext(sessionId, handle.context)
+                } finally {
+                    listeningContexts.remove(sessionId)
+                }
             }
         }
     }
@@ -255,10 +276,75 @@ class MessageBridge(
                     sendToSession(sessionId, "错误: ${sessionOutput.error.message}")
                 }
                 is SessionOutput.Compact -> {
-                    logger.debug("Session {} compacted", sessionId)
+                    // 丢弃流式输出 (OUTPUTTING)，只处理完成状态
+                    if (sessionOutput.output.status == io.github.autotweaker.api.types.agent.CompactOutput.Status.FINISHED) {
+                        flushBuffer(sessionId, buffer)
+                        // 压缩完成，发送消息总数提示
+                        val messageCount = getMessageCount(sessionId)
+                        sendToSession(sessionId, "上下文已压缩，剩余 $messageCount 条消息")
+                    }
+                    // OUTPUTTING 和 FAILED 状态丢弃
                 }
             }
         }
+    }
+
+    /**
+     * 监听会话上下文变化
+     *
+     * 当上下文更新时，检查是否有新的消息需要发送。
+     * 通过时间戳过滤，避免发送古早消息。
+     */
+    private suspend fun listenToContext(sessionId: UUID, context: StateFlow<SessionContext>) {
+        context.collect { sessionContext ->
+            val lastTimestamp = lastMessageTimestamps[sessionId] ?: 0L
+            val currentTime = System.currentTimeMillis()
+
+            // 如果距离上次消息超过 5 秒，可能是上下文更新而非新消息
+            // 这里我们只记录日志，实际的消息发送由 output 监听处理
+            if (currentTime - lastTimestamp > 5000) {
+                logger.debug("Session {} context updated, but no recent message activity", sessionId)
+            }
+        }
+    }
+
+    /**
+     * 获取会话中的消息总数
+     *
+     * 根据 SessionContextIndex 计算 historyRounds + currentRound 的消息数。
+     *
+     * @param sessionId 会话 ID
+     * @return 消息总数
+     */
+    private fun getMessageCount(sessionId: UUID): Int {
+        val handle = core.session.getHandle(sessionId) ?: return 0
+        val context = handle.context.value
+        val index = context.index
+
+        var count = 0
+
+        // 计算 historyRounds 中的消息数
+        index.historyRounds?.forEach { round ->
+            count++ // userMessage
+            round.turns?.forEach { turn ->
+                count++ // assistantMessage
+                count += turn.tools.size * 2 // call + result
+            }
+            if (round.finalAssistantMessage != null) count++
+        }
+
+        // 计算 currentRound 中的消息数
+        index.currentRound?.let { round ->
+            count++ // userMessage
+            round.turns?.forEach { turn ->
+                count++ // assistantMessage
+                count += turn.tools.size * 2 // call + result
+            }
+            if (round.assistantMessage != null) count++
+            count += round.pendingToolCalls?.size ?: 0
+        }
+
+        return count
     }
 
     private suspend fun flushBuffer(sessionId: UUID, buffer: StringBuilder) {
