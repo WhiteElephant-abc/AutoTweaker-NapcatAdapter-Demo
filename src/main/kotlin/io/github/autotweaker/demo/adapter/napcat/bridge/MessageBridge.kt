@@ -338,7 +338,9 @@ class MessageBridge(
             contextBuilder.appendLine()
             contextBuilder.append(text)
 
-            contextBuilder.toString()
+            val result = contextBuilder.toString()
+            logger.debug("Built message with context for user {} group {}: {}", userId, groupId, result.take(500))
+            result
         } catch (e: Exception) {
             logger.error("Failed to build message context", e)
             // 失败时只发送原始消息
