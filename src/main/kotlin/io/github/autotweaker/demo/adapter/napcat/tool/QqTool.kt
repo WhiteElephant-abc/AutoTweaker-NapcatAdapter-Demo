@@ -145,6 +145,22 @@ class QqTool : Tool {
                     )
                 )
             ),
+            Tool.Function(
+                name = "get_private_msg_history",
+                description = "获取私聊消息历史",
+                parameters = mapOf(
+                    "userId" to Tool.Function.Property(
+                        description = "用户 QQ 号",
+                        required = true,
+                        valueType = Tool.Function.Property.ValueType.StringValue()
+                    ),
+                    "count" to Tool.Function.Property(
+                        description = "获取数量，默认 20",
+                        required = false,
+                        valueType = Tool.Function.Property.ValueType.IntegerValue()
+                    )
+                )
+            ),
             // ==================== 群管理 ====================
             Tool.Function(
                 name = "kick_group_member",
@@ -386,6 +402,9 @@ class QqTool : Tool {
                 }
                 "get_group_msg_history" -> {
                     api.getGroupMsgHistory(args.long("groupId"), count = args.intOrDefault("count", 20))
+                }
+                "get_private_msg_history" -> {
+                    api.getPrivateMsgHistory(args.long("userId"), count = args.intOrDefault("count", 20))
                 }
                 // 群管理
                 "kick_group_member" -> {
