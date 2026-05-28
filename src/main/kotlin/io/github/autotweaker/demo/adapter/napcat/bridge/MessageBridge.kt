@@ -57,7 +57,7 @@ class MessageBridge(
     /** 会话 → 消息发送上下文的映射，用于回复路由 */
     private val sessionContexts = ConcurrentHashMap<UUID, MessageContext>()
 
-    /** 会话 → 最新消息时间戳，用于过滤古早消息 */
+    /** 会话 → 最新消息时间戳，用于记录用户发送消息时间 */
     private val lastMessageTimestamps = ConcurrentHashMap<UUID, Long>()
 
     /** 会话 → 上次上下文消息 ID 集合，用于检测新增消息 */
@@ -234,15 +234,13 @@ class MessageBridge(
     }
 
     private suspend fun listenToOutput(sessionId: UUID, output: SharedFlow<SessionOutput>) {
-        val buffer = StringBuilder()
-
         output.collect { sessionOutput ->
             when (sessionOutput) {
-                is SessionOutput.LlmDelta -> {
-                    sessionOutput.delta.content?.let { buffer.append(it) }
-                }
+                // 流式输出全部丢弃，消息通过 context 监听发送
+                is SessionOutput.LlmDelta -> { /* 丢弃 */ }
+                is SessionOutput.Tool -> { /* 丢弃 */ }
+
                 is SessionOutput.ToolRequest -> {
-                    flushBuffer(sessionId, buffer)
                     val prompt = buildString {
                         appendLine("工具调用请求:")
                         sessionOutput.requests.forEachIndexed { index, req ->
@@ -254,23 +252,23 @@ class MessageBridge(
                     }
                     sendToSession(sessionId, prompt)
                 }
-                is SessionOutput.Tool -> {
-                    logger.debug("Tool output: {} - {}", sessionOutput.output.name, sessionOutput.output.content)
-                }
                 is SessionOutput.LlmError -> {
-                    flushBuffer(sessionId, buffer)
                     sendToSession(sessionId, "LLM 错误: ${sessionOutput.content}")
                 }
                 is SessionOutput.Error -> {
-                    flushBuffer(sessionId, buffer)
                     sendToSession(sessionId, "错误: ${sessionOutput.error.message}")
                 }
                 is SessionOutput.Compact -> {
-                    // 丢弃流式输出 (OUTPUTTING)，只处理完成状态
-                    if (sessionOutput.output.status == io.github.autotweaker.api.types.agent.CompactOutput.Status.FINISHED) {
-                        flushBuffer(sessionId, buffer)
-                        val messageCount = getMessageCount(sessionId)
-                        sendToSession(sessionId, "上下文已压缩，剩余 $messageCount 条消息")
+                    when (sessionOutput.output.status) {
+                        io.github.autotweaker.api.types.agent.CompactOutput.Status.FINISHED -> {
+                            val messageCount = getMessageCount(sessionId)
+                            sendToSession(sessionId, "上下文已压缩，剩余 $messageCount 条消息")
+                        }
+                        io.github.autotweaker.api.types.agent.CompactOutput.Status.FAILED -> {
+                            sendToSession(sessionId, "上下文压缩失败")
+                        }
+                        // OUTPUTTING 丢弃
+                        else -> {}
                     }
                 }
             }
@@ -281,18 +279,16 @@ class MessageBridge(
      * 监听会话上下文变化
      *
      * 当上下文更新时，检测新增的 AI 消息并发送。
-     * 通过时间戳过滤，避免发送古早消息。
+     * 只要有新增消息就发送，不设时间阈值。
      */
     private suspend fun listenToContext(sessionId: UUID, context: StateFlow<SessionContext>) {
         context.collect { sessionContext ->
             val currentIds = getAllMessageIds(sessionContext.index)
             val previousIds = lastMessageIds[sessionId] ?: emptySet()
-            val lastTimestamp = lastMessageTimestamps[sessionId] ?: 0L
-            val currentTime = System.currentTimeMillis()
 
             // 找出新增的消息 ID
             val newIds = currentIds - previousIds
-            if (newIds.isNotEmpty() && currentTime - lastTimestamp < 5000) {
+            if (newIds.isNotEmpty()) {
                 // 加载新增消息
                 val messages = core.session.loadMessages(newIds.toList())
                 if (messages != null) {
@@ -383,13 +379,6 @@ class MessageBridge(
         }
 
         return count
-    }
-
-    private suspend fun flushBuffer(sessionId: UUID, buffer: StringBuilder) {
-        if (buffer.isNotEmpty()) {
-            sendToSession(sessionId, buffer.toString())
-            buffer.clear()
-        }
     }
 
     private suspend fun sendToSession(sessionId: UUID, text: String) {
