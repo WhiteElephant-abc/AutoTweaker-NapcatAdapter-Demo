@@ -128,7 +128,6 @@ class NapCatWsClientImpl(
     // ==================== 消息解析 ====================
 
     private suspend fun handleMessage(text: String) {
-        logger.debug("Received: {}", text)
         try {
             val jsonElement = json.parseToJsonElement(text)
             val obj = jsonElement.jsonObject
