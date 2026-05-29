@@ -1,18 +1,16 @@
 package io.github.autotweaker.demo.adapter.napcat.ws
 
-import io.github.autotweaker.demo.adapter.napcat.model.data.*
 import io.github.autotweaker.demo.adapter.napcat.model.event.*
-import io.github.autotweaker.demo.adapter.napcat.model.message.MessageChain
 import io.ktor.client.*
 import io.ktor.client.plugins.websocket.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
-import kotlinx.serialization.*
 import kotlinx.serialization.json.*
 import org.slf4j.LoggerFactory
 import java.io.Closeable
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
@@ -27,8 +25,8 @@ import java.util.concurrent.atomic.AtomicLong
  * @property json JSON 序列化配置，默认忽略未知字段
  */
 class NapCatWsClientImpl(
-    private val json: Json = Json { ignoreUnknownKeys = true; isLenient = true }
-) : NapCatWsClient {
+    json: Json = Json { ignoreUnknownKeys = true; isLenient = true }
+) : NapCatApiImpl(json), NapCatWsClient {
 
     private val logger = LoggerFactory.getLogger(NapCatWsClient::class.java)
 
@@ -40,13 +38,13 @@ class NapCatWsClientImpl(
     private val pendingRequests = ConcurrentHashMap<String, Channel<JsonObject>>()
 
     // 事件处理器 - 使用 CopyOnWriteArrayList 保证线程安全
-    private val eventHandlers = java.util.concurrent.CopyOnWriteArrayList<suspend (OneBotEvent) -> Unit>()
-    private val messageHandlers = java.util.concurrent.CopyOnWriteArrayList<suspend (MessageEvent) -> Unit>()
-    private val groupMessageHandlers = java.util.concurrent.CopyOnWriteArrayList<suspend (GroupMessageEvent) -> Unit>()
-    private val privateMessageHandlers = java.util.concurrent.CopyOnWriteArrayList<suspend (PrivateMessageEvent) -> Unit>()
-    private val noticeHandlers = java.util.concurrent.CopyOnWriteArrayList<suspend (NoticeEvent) -> Unit>()
-    private val requestHandlers = java.util.concurrent.CopyOnWriteArrayList<suspend (RequestEvent) -> Unit>()
-    private val metaHandlers = java.util.concurrent.CopyOnWriteArrayList<suspend (MetaEvent) -> Unit>()
+    private val eventHandlers = CopyOnWriteArrayList<suspend (OneBotEvent) -> Unit>()
+    private val messageHandlers = CopyOnWriteArrayList<suspend (MessageEvent) -> Unit>()
+    private val groupMessageHandlers = CopyOnWriteArrayList<suspend (GroupMessageEvent) -> Unit>()
+    private val privateMessageHandlers = CopyOnWriteArrayList<suspend (PrivateMessageEvent) -> Unit>()
+    private val noticeHandlers = CopyOnWriteArrayList<suspend (NoticeEvent) -> Unit>()
+    private val requestHandlers = CopyOnWriteArrayList<suspend (RequestEvent) -> Unit>()
+    private val metaHandlers = CopyOnWriteArrayList<suspend (MetaEvent) -> Unit>()
 
     // 生命周期处理器
     @Volatile private var connectHandler: (() -> Unit)? = null
@@ -54,6 +52,8 @@ class NapCatWsClientImpl(
     @Volatile private var errorHandler: ((Throwable) -> Unit)? = null
 
     override val isConnected: Boolean get() = connected.get()
+
+    // ==================== 连接管理 ====================
 
     override suspend fun connect(host: String, port: Int, token: String?) {
         if (connected.get()) return
@@ -121,6 +121,8 @@ class NapCatWsClientImpl(
         runBlocking { disconnect() }
     }
 
+    // ==================== 消息解析 ====================
+
     private suspend fun handleMessage(text: String) {
         logger.debug("Received: {}", text)
         try {
@@ -154,6 +156,8 @@ class NapCatWsClientImpl(
             logger.error("Failed to parse event", e)
         }
     }
+
+    // ==================== 事件解析 ====================
 
     private fun parseEvent(obj: JsonObject): OneBotEvent? {
         val postType = obj["post_type"]?.jsonPrimitive?.content ?: return null
@@ -214,6 +218,8 @@ class NapCatWsClientImpl(
         }
     }
 
+    // ==================== 事件分发 ====================
+
     private suspend fun dispatchEvent(event: OneBotEvent) {
         eventHandlers.forEach { handler ->
             try { handler(event) } catch (e: Exception) { logger.error("Event handler error", e) }
@@ -234,10 +240,11 @@ class NapCatWsClientImpl(
         }
     }
 
-    // API 调用
-    private suspend fun callApi(
+    // ==================== API 调用基础设施 ====================
+
+    override suspend fun callApi(
         action: String,
-        params: Map<String, JsonElement>? = null
+        params: Map<String, JsonElement>?
     ): JsonObject {
         val echo = echoCounter.incrementAndGet().toString()
         val request = buildJsonObject {
@@ -265,233 +272,8 @@ class NapCatWsClientImpl(
         }
     }
 
-    private suspend fun <T> callApiAndDecode(
-        action: String,
-        params: Map<String, JsonElement>? = null,
-        deserializer: DeserializationStrategy<T>
-    ): T {
-        val response = callApi(action, params)
-        val status = response["status"]?.jsonPrimitive?.content
-        val retcode = response["retcode"]?.jsonPrimitive?.int
-        val message = response["message"]?.jsonPrimitive?.content
+    // ==================== 事件订阅 ====================
 
-        if (status != "ok" || retcode != 0) {
-            throw NapCatApiException(retcode ?: -1, message ?: "Unknown error")
-        }
-
-        val data = response["data"]
-        if (data == null || data is JsonNull) {
-            throw NapCatApiException(-1, "Response data is null")
-        }
-
-        return json.decodeFromJsonElement(deserializer, data)
-    }
-
-    // NapCatApi 实现
-    override suspend fun getLoginInfo(): LoginInfo =
-        callApiAndDecode("get_login_info", deserializer = LoginInfo.serializer())
-
-    override suspend fun getStatus(): BotStatus =
-        callApiAndDecode("get_status", deserializer = BotStatus.serializer())
-
-    override suspend fun getVersionInfo(): VersionInfo =
-        callApiAndDecode("get_version_info", deserializer = VersionInfo.serializer())
-
-    override suspend fun sendPrivateMessage(userId: Long, message: MessageChain): MessageResult {
-        val params = buildMap {
-            put("user_id", json.encodeToJsonElement(userId.toString()))
-            put("message", json.encodeToJsonElement(message))
-        }
-        return callApiAndDecode("send_private_msg", params, MessageResult.serializer())
-    }
-
-    override suspend fun sendGroupMessage(groupId: Long, message: MessageChain): MessageResult {
-        val params = buildMap {
-            put("group_id", json.encodeToJsonElement(groupId.toString()))
-            put("message", json.encodeToJsonElement(message))
-        }
-        return callApiAndDecode("send_group_msg", params, MessageResult.serializer())
-    }
-
-    override suspend fun deleteMessage(messageId: Int) {
-        val params = buildMap {
-            put("message_id", json.encodeToJsonElement(messageId))
-        }
-        callApiAndDecode("delete_msg", params, JsonObject.serializer())
-    }
-
-    override suspend fun getMessage(messageId: Int): MessageDetail {
-        val params = buildMap {
-            put("message_id", json.encodeToJsonElement(messageId))
-        }
-        return callApiAndDecode("get_msg", params, MessageDetail.serializer())
-    }
-
-    override suspend fun getFriendList(): List<FriendInfo> =
-        callApiAndDecode("get_friend_list", deserializer = serializer<List<FriendInfo>>())
-
-    override suspend fun getGroupList(noCache: Boolean): List<GroupInfo> {
-        val params = buildMap {
-            put("no_cache", json.encodeToJsonElement(noCache))
-        }
-        return callApiAndDecode("get_group_list", params, serializer<List<GroupInfo>>())
-    }
-
-    override suspend fun getGroupMemberList(groupId: Long): List<GroupMemberInfo> {
-        val params = buildMap {
-            put("group_id", json.encodeToJsonElement(groupId.toString()))
-        }
-        return callApiAndDecode("get_group_member_list", params, serializer<List<GroupMemberInfo>>())
-    }
-
-    override suspend fun getGroupMemberInfo(groupId: Long, userId: Long): GroupMemberInfo {
-        val params = buildMap {
-            put("group_id", json.encodeToJsonElement(groupId.toString()))
-            put("user_id", json.encodeToJsonElement(userId.toString()))
-        }
-        return callApiAndDecode("get_group_member_info", params, GroupMemberInfo.serializer())
-    }
-
-    override suspend fun setGroupKick(groupId: Long, userId: Long, rejectAddRequest: Boolean) {
-        val params = buildMap {
-            put("group_id", json.encodeToJsonElement(groupId.toString()))
-            put("user_id", json.encodeToJsonElement(userId.toString()))
-            put("reject_add_request", json.encodeToJsonElement(rejectAddRequest))
-        }
-        callApiAndDecode("set_group_kick", params, JsonObject.serializer())
-    }
-
-    override suspend fun setGroupBan(groupId: Long, userId: Long, duration: Int) {
-        val params = buildMap {
-            put("group_id", json.encodeToJsonElement(groupId.toString()))
-            put("user_id", json.encodeToJsonElement(userId.toString()))
-            put("duration", json.encodeToJsonElement(duration))
-        }
-        callApiAndDecode("set_group_ban", params, JsonObject.serializer())
-    }
-
-    override suspend fun setGroupCard(groupId: Long, userId: Long, card: String) {
-        val params = buildMap {
-            put("group_id", json.encodeToJsonElement(groupId.toString()))
-            put("user_id", json.encodeToJsonElement(userId.toString()))
-            put("card", json.encodeToJsonElement(card))
-        }
-        callApiAndDecode("set_group_card", params, JsonObject.serializer())
-    }
-
-    override suspend fun setGroupName(groupId: Long, groupName: String) {
-        val params = buildMap {
-            put("group_id", json.encodeToJsonElement(groupId.toString()))
-            put("group_name", json.encodeToJsonElement(groupName))
-        }
-        callApiAndDecode("set_group_name", params, JsonObject.serializer())
-    }
-
-    override suspend fun setGroupAdmin(groupId: Long, userId: Long, enable: Boolean) {
-        val params = buildMap {
-            put("group_id", json.encodeToJsonElement(groupId.toString()))
-            put("user_id", json.encodeToJsonElement(userId.toString()))
-            put("enable", json.encodeToJsonElement(enable))
-        }
-        callApiAndDecode("set_group_admin", params, JsonObject.serializer())
-    }
-
-    override suspend fun getGroupMsgHistory(groupId: Long, messageSeq: Long?, count: Int): List<GroupMessageEvent> {
-        val params = buildMap {
-            put("group_id", json.encodeToJsonElement(groupId.toString()))
-            if (messageSeq != null) {
-                put("message_seq", json.encodeToJsonElement(messageSeq))
-            }
-            put("count", json.encodeToJsonElement(count))
-        }
-        val response = callApi("get_group_msg_history", params)
-        val data = response["data"]?.jsonObject ?: return emptyList()
-        val messages = data["messages"]?.jsonArray ?: return emptyList()
-        return messages.mapNotNull { element ->
-            try {
-                val obj = element.jsonObject
-                // 确保是群消息类型
-                val messageType = obj["message_type"]?.jsonPrimitive?.content
-                if (messageType == "group") {
-                    json.decodeFromJsonElement(GroupMessageEvent.serializer(), obj)
-                } else {
-                    null
-                }
-            } catch (e: Exception) {
-                logger.debug("Failed to parse group message: {}", e.message)
-                null
-            }
-        }
-    }
-
-    override suspend fun getPrivateMsgHistory(userId: Long, messageSeq: Long?, count: Int): List<PrivateMessageEvent> {
-        val params = buildMap {
-            put("user_id", json.encodeToJsonElement(userId.toString()))
-            if (messageSeq != null) {
-                put("message_seq", json.encodeToJsonElement(messageSeq))
-            }
-            put("count", json.encodeToJsonElement(count))
-        }
-        val response = callApi("get_friend_msg_history", params)
-        val data = response["data"]?.jsonObject ?: return emptyList()
-        val messages = data["messages"]?.jsonArray ?: return emptyList()
-        return messages.mapNotNull { element ->
-            try {
-                val obj = element.jsonObject
-                // 确保是私聊消息类型
-                val messageType = obj["message_type"]?.jsonPrimitive?.content
-                if (messageType == "private") {
-                    json.decodeFromJsonElement(PrivateMessageEvent.serializer(), obj)
-                } else {
-                    null
-                }
-            } catch (e: Exception) {
-                logger.debug("Failed to parse private message: {}", e.message)
-                null
-            }
-        }
-    }
-
-    override suspend fun getImage(file: String): FileInfo {
-        val params = buildMap {
-            put("file", json.encodeToJsonElement(file))
-        }
-        return callApiAndDecode("get_image", params, FileInfo.serializer())
-    }
-
-    override suspend fun getRecord(file: String, outFormat: String?): FileInfo {
-        val params = buildMap {
-            put("file", json.encodeToJsonElement(file))
-            if (outFormat != null) put("out_format", json.encodeToJsonElement(outFormat))
-        }
-        return callApiAndDecode("get_record", params, FileInfo.serializer())
-    }
-
-    override suspend fun getFile(file: String): FileInfo {
-        val params = buildMap {
-            put("file", json.encodeToJsonElement(file))
-        }
-        return callApiAndDecode("get_file", params, FileInfo.serializer())
-    }
-
-    override suspend fun getForwardMsg(id: String): List<ForwardMessage> {
-        val params = buildMap {
-            put("id", json.encodeToJsonElement(id))
-        }
-        val response = callApi("get_forward_msg", params)
-        val data = response["data"]?.jsonObject ?: return emptyList()
-        val messages = data["messages"]?.jsonArray ?: return emptyList()
-        return messages.mapNotNull { element ->
-            try {
-                json.decodeFromJsonElement(ForwardMessage.serializer(), element)
-            } catch (e: Exception) {
-                logger.debug("Failed to parse forward message: {}", e.message)
-                null
-            }
-        }
-    }
-
-    // 事件订阅
     override fun onEvent(handler: suspend (OneBotEvent) -> Unit) {
         eventHandlers.add(handler)
     }

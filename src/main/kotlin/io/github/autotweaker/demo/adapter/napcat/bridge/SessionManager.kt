@@ -4,13 +4,6 @@ import io.github.autotweaker.api.adapter.CoreAPI
 import io.github.autotweaker.api.types.session.SessionConfig
 import io.github.autotweaker.api.types.session.SessionHandle
 import io.github.autotweaker.demo.adapter.napcat.permission.PermissionManager
-import io.github.autotweaker.demo.adapter.napcat.permission.Role
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import org.slf4j.LoggerFactory
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -36,18 +29,6 @@ class SessionManager(
 
     private val logger = LoggerFactory.getLogger(SessionManager::class.java)
 
-    companion object {
-        private const val SESSION_MAP_KEY = "session_map"
-        private const val USER_MODELS_KEY = "user_models"
-        private const val USER_WORKSPACES_KEY = "user_workspaces"
-        private const val USER_THINKING_KEY = "user_thinking"
-        private const val GLOBAL_CONFIG_KEY = "global_config"
-    }
-
-    private val store by lazy {
-        core.config.jsonStore(SessionManager::class)
-    }
-
     /** userId → sessionId */
     private val activeSessions = ConcurrentHashMap<Long, UUID>()
 
@@ -67,8 +48,19 @@ class SessionManager(
     @Volatile
     private var globalSummarizeModel: UUID? = null
 
+    private val persistence = SessionPersistence(
+        store = core.config.jsonStore(SessionManager::class),
+        activeSessions = activeSessions,
+        userPrimaryModels = userPrimaryModels,
+        userSelectedWorkspaces = userSelectedWorkspaces,
+        userThinking = userThinking,
+        globalFallbackModels = globalFallbackModels,
+        globalSummarizeModel = { globalSummarizeModel }
+    )
+
     init {
-        loadFromStore()
+        persistence.load()
+        globalSummarizeModel = persistence.loadSummarizeModel()
     }
 
     // ==================== 会话管理 ====================
@@ -77,12 +69,12 @@ class SessionManager(
 
     fun setActiveSession(userId: Long, sessionId: UUID) {
         activeSessions[userId] = sessionId
-        saveToStore()
+        persistence.save()
     }
 
     fun clearActiveSession(userId: Long) {
         activeSessions.remove(userId)
-        saveToStore()
+        persistence.save()
     }
 
     fun getActiveSessionHandle(userId: Long): SessionHandle? {
@@ -115,7 +107,7 @@ class SessionManager(
      */
     fun setUserPrimaryModel(userId: Long, modelId: UUID) {
         userPrimaryModels[userId] = modelId
-        saveToStore()
+        persistence.save()
         logger.info("User {} primary model set to {}", userId, modelId)
     }
 
@@ -137,7 +129,7 @@ class SessionManager(
      */
     fun setUserWorkspace(userId: Long, workspaceId: UUID) {
         userSelectedWorkspaces[userId] = workspaceId
-        saveToStore()
+        persistence.save()
         logger.info("User {} selected workspace {}", userId, workspaceId)
     }
 
@@ -159,7 +151,7 @@ class SessionManager(
      */
     fun setUserThinking(userId: Long, enabled: Boolean) {
         userThinking[userId] = enabled
-        saveToStore()
+        persistence.save()
         logger.info("User {} thinking set to {}", userId, enabled)
     }
 
@@ -184,7 +176,7 @@ class SessionManager(
     fun addFallbackModel(modelId: UUID): Boolean {
         if (modelId in globalFallbackModels) return false
         globalFallbackModels.add(modelId)
-        saveToStore()
+        persistence.save()
         logger.info("Added fallback model: {}", modelId)
         return true
     }
@@ -197,7 +189,7 @@ class SessionManager(
      */
     fun removeFallbackModel(modelId: UUID): Boolean {
         if (!globalFallbackModels.remove(modelId)) return false
-        saveToStore()
+        persistence.save()
         logger.info("Removed fallback model: {}", modelId)
         return true
     }
@@ -209,14 +201,13 @@ class SessionManager(
      */
     fun setSummarizeModel(modelId: UUID) {
         globalSummarizeModel = modelId
-        saveToStore()
+        persistence.save()
         logger.info("Summarize model set to {}", modelId)
     }
 
     // ==================== 会话创建 ====================
 
     suspend fun autoCreateSession(userId: Long, title: String = "新会话"): SessionHandle {
-        val role = permissionManager.getRole(userId)
         val config = buildSessionConfig(userId)
 
         // 获取用户选择的工作区
@@ -302,137 +293,5 @@ class SessionManager(
             summarizeModel = summarizeModel,
             thinking = getUserThinking(userId)
         )
-    }
-
-    // ==================== 持久化 ====================
-
-    private fun loadFromStore() {
-        try {
-            val element = store.get() ?: return
-            val obj = element.jsonObject
-
-            obj[SESSION_MAP_KEY]?.let { loadSessionMap(it) }
-            obj[USER_MODELS_KEY]?.let { loadUserModels(it) }
-            obj[USER_WORKSPACES_KEY]?.let { loadUserWorkspaces(it) }
-            obj[USER_THINKING_KEY]?.let { loadUserThinking(it) }
-            obj[GLOBAL_CONFIG_KEY]?.let { loadGlobalConfig(it) }
-
-            logger.debug("Loaded {} sessions, {} user models, {} user workspaces, {} user thinking",
-                activeSessions.size, userPrimaryModels.size, userSelectedWorkspaces.size, userThinking.size)
-        } catch (e: Exception) {
-            logger.warn("Failed to load from store", e)
-        }
-    }
-
-    private fun loadSessionMap(element: kotlinx.serialization.json.JsonElement) {
-        try {
-            element.jsonObject.forEach { (key, value) ->
-                try {
-                    activeSessions[key.toLong()] = UUID.fromString(value.jsonPrimitive.content)
-                } catch (e: Exception) {
-                    logger.warn("Failed to parse session: {} -> {}", key, value)
-                }
-            }
-        } catch (e: Exception) {
-            logger.warn("Failed to load session map", e)
-        }
-    }
-
-    private fun loadUserModels(element: kotlinx.serialization.json.JsonElement) {
-        try {
-            element.jsonObject.forEach { (key, value) ->
-                try {
-                    userPrimaryModels[key.toLong()] = UUID.fromString(value.jsonPrimitive.content)
-                } catch (e: Exception) {
-                    logger.warn("Failed to parse user model: {} -> {}", key, value)
-                }
-            }
-        } catch (e: Exception) {
-            logger.warn("Failed to load user models", e)
-        }
-    }
-
-    private fun loadUserWorkspaces(element: kotlinx.serialization.json.JsonElement) {
-        try {
-            element.jsonObject.forEach { (key, value) ->
-                try {
-                    userSelectedWorkspaces[key.toLong()] = UUID.fromString(value.jsonPrimitive.content)
-                } catch (e: Exception) {
-                    logger.warn("Failed to parse user workspace: {} -> {}", key, value)
-                }
-            }
-        } catch (e: Exception) {
-            logger.warn("Failed to load user workspaces", e)
-        }
-    }
-
-    private fun loadUserThinking(element: kotlinx.serialization.json.JsonElement) {
-        try {
-            element.jsonObject.forEach { (key, value) ->
-                try {
-                    userThinking[key.toLong()] = value.jsonPrimitive.content.toBoolean()
-                } catch (e: Exception) {
-                    logger.warn("Failed to parse user thinking: {} -> {}", key, value)
-                }
-            }
-        } catch (e: Exception) {
-            logger.warn("Failed to load user thinking", e)
-        }
-    }
-
-    private fun loadGlobalConfig(element: kotlinx.serialization.json.JsonElement) {
-        try {
-            val obj = element.jsonObject
-            obj["fallback"]?.jsonArray?.forEach {
-                try {
-                    globalFallbackModels.add(UUID.fromString(it.jsonPrimitive.content))
-                } catch (e: Exception) {
-                    logger.warn("Failed to parse fallback model: {}", it)
-                }
-            }
-            obj["summarize"]?.let {
-                globalSummarizeModel = UUID.fromString(it.jsonPrimitive.content)
-            }
-        } catch (e: Exception) {
-            logger.warn("Failed to load global config", e)
-        }
-    }
-
-    private fun saveToStore() {
-        try {
-            val obj = buildJsonObject {
-                put(SESSION_MAP_KEY, buildJsonObject {
-                    activeSessions.forEach { (userId, sessionId) ->
-                        put(userId.toString(), JsonPrimitive(sessionId.toString()))
-                    }
-                })
-                put(USER_MODELS_KEY, buildJsonObject {
-                    userPrimaryModels.forEach { (userId, modelId) ->
-                        put(userId.toString(), JsonPrimitive(modelId.toString()))
-                    }
-                })
-                put(USER_WORKSPACES_KEY, buildJsonObject {
-                    userSelectedWorkspaces.forEach { (userId, workspaceId) ->
-                        put(userId.toString(), JsonPrimitive(workspaceId.toString()))
-                    }
-                })
-                put(USER_THINKING_KEY, buildJsonObject {
-                    userThinking.forEach { (userId, enabled) ->
-                        put(userId.toString(), JsonPrimitive(enabled))
-                    }
-                })
-                put(GLOBAL_CONFIG_KEY, buildJsonObject {
-                    put("fallback", buildJsonArray {
-                        globalFallbackModels.forEach { add(JsonPrimitive(it.toString())) }
-                    })
-                    globalSummarizeModel?.let {
-                        put("summarize", JsonPrimitive(it.toString()))
-                    }
-                })
-            }
-            store.set(obj)
-        } catch (e: Exception) {
-            logger.error("Failed to save to store", e)
-        }
     }
 }
