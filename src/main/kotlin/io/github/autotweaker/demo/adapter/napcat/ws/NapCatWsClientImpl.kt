@@ -76,12 +76,15 @@ class NapCatWsClientImpl(
                     wsSession = this
                     connected.set(true)
                     logger.info("Connected to NapCat WS at $host:$port")
+                    logger.debug("WebSocket session established, closeReason: {}", closeReason)
                     connectHandler?.invoke()
 
                     try {
                         for (frame in incoming) {
+                            logger.debug("Received frame: {}", frame)
                             if (frame is Frame.Text) {
                                 val text = frame.readText()
+                                logger.debug("Received text: {}", text)
                                 launch {
                                     handleMessage(text)
                                 }
@@ -91,6 +94,7 @@ class NapCatWsClientImpl(
                         logger.error("WS error", e)
                         errorHandler?.invoke(e)
                     } finally {
+                        logger.info("WebSocket closing, closeReason: {}", closeReason)
                         connected.set(false)
                         wsSession = null
                         // 清理所有待处理的请求
