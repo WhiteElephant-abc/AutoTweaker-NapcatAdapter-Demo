@@ -91,12 +91,6 @@ class MessageBridge(
         val groupId = event.groupId
         val selfId = event.selfId
 
-        // 检查授权
-        if (!permissionManager.isAuthorized(userId)) {
-            sendReply(groupId, userId, "未授权，请联系管理员添加白名单")
-            return
-        }
-
         // 单字符 "a" 快捷审批所有待审批工具调用（无需 @bot）
         if (event.rawMessage.trim() == "a") {
             val reply = tryApproveAll(userId)
@@ -110,6 +104,12 @@ class MessageBridge(
         val text = extractAtText(event.message, selfId)
         if (text == null) {
             // 没有 @bot，忽略
+            return
+        }
+
+        // 检查授权
+        if (!permissionManager.isAuthorized(userId)) {
+            sendReply(groupId, userId, "未授权，请联系管理员添加白名单")
             return
         }
 
