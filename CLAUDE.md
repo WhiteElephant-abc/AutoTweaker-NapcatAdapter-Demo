@@ -54,7 +54,7 @@ QQ → NapCatWsClient (Ktor WebSocket) → MessageBridge → CommandRegistry or 
 ## Key Patterns
 
 - **SPI discovery**: `@AutoService` + kapt generates `META-INF/services/` files for ServiceLoader
-- **Classloader isolation**: `QqTool.resolveApi()` handles different classloaders for Adapter vs Tool, with reflection fallback
+- **Shared classloader**: All plugins share the same URLClassLoader (since v0.1.0-alpha.13), Adapter and Tool directly access each other's types and state
 - **Echo-based WS matching**: Incrementing echo counter correlates API requests with responses via `Channel`
 - **Context injection**: `MessageBridge.buildMessageWithContext()` wraps messages with XML-like tags (`<session-info>`, `<context>`, `<environment>`) for LLM context
 - **Custom serialization**: `MessageSegmentSerializer` handles OneBot's `{"type":"xxx","data":{...}}` envelope format
@@ -69,4 +69,4 @@ Runtime persistence uses AutoTweaker `JsonStore` API for sessions, user preferen
 
 ## Dependencies
 
-Core dependency: `io.github.autotweaker:api:0.1.0-alpha.12` from GitHub Packages. API documentation is in `doc/`.
+Core dependency: `io.github.autotweaker:api:0.1.0-alpha.13` from GitHub Packages. API documentation is in `doc/`.

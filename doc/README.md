@@ -1,6 +1,6 @@
 # AutoTweaker API 文档
 
-> 版本: v0.1.0-alpha.12
+> 版本: v0.1.0-alpha.13
 > 源码: [github.com/AutoTweaker/core](https://github.com/AutoTweaker/core/tree/main/api/src/main/kotlin/io/github/autotweaker/api)
 
 ## 概述
@@ -145,3 +145,5 @@ class MyTool : Tool {
 - **内置组件**：通过 `ServiceLoader` 从 classpath 加载
 - **外部插件**：从 `~/.config/autotweaker/plugins/` 目录加载 JAR 文件
 - **优先级**：外部插件优先于内置组件（同名时外部覆盖内置）
+
+- **ClassLoader**：所有插件共享同一个 URLClassLoader（自 v0.1.0-alpha.13 起），Adapter 和 Tool 可直接互访对方的类型和状态
