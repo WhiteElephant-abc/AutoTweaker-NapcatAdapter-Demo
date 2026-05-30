@@ -98,7 +98,7 @@ fun getEnv(type: CoreConfig.JsonConfig.Env.Type, id: String): String?
 fun setEnv(env: List<CoreConfig.JsonConfig.Env>)
 ```
 
-批量设置环境变量。
+批量设置环境变量。已存在的 ID 会被更新。
 
 ### removeEnv
 
@@ -106,7 +106,7 @@ fun setEnv(env: List<CoreConfig.JsonConfig.Env>)
 fun removeEnv(type: CoreConfig.JsonConfig.Env.Type, id: String)
 ```
 
-删除环境变量。
+删除环境变量。ID 不存在时静默处理。
 
 ## Provider 管理
 
@@ -124,7 +124,7 @@ fun listProviders(): List<CoreConfig.ProviderConfig.Provider>
 fun listAvailableProviderTypes(): List<String>
 ```
 
-列出所有可用的 Provider 类型（已注册的 LlmClient）。
+列出所有可用的 Provider 类型（已注册的 LlmClient）。用于确认类型是否可用。
 
 ### getProviderMeta
 
@@ -132,13 +132,17 @@ fun listAvailableProviderTypes(): List<String>
 fun getProviderMeta(type: String): LlmClient.ProviderInfo
 ```
 
-获取 Provider 类型的元数据。
+获取 Provider 类型的元数据（支持的模型列表、默认 URL 等）。
+
+**前置校验：**
+
+- 通过 `listAvailableProviderTypes()` 确认类型已注册
 
 **异常：**
 
-| 异常 | 条件 |
-|------|------|
-| `IllegalArgumentException("Unknown LLM provider: ...")` | Provider 类型未注册 |
+| 异常 | 条件 | 预防 |
+|------|------|------|
+| `IllegalArgumentException("Unknown LLM provider: ...")` | Provider 类型未注册 | 先调用 `listAvailableProviderTypes()` |
 
 ### addProvider
 
@@ -148,14 +152,19 @@ fun addProvider(provider: CoreConfig.ProviderConfig.Provider)
 
 添加 Provider。
 
+**前置校验：**
+
+- 通过 `listAvailableProviderTypes()` 确认 `type` 已注册
+- 通过 `listProviders()` 确保 `displayName` 不重复
+- 通过 `listApiKeyNames()` 确认 `keyId` 对应的 API Key 存在
+
 **异常：**
 
-| 异常 | 条件 |
-|------|------|
-| `IllegalArgumentException("Unknown LLM provider: ...")` | Provider 类型未注册 |
-| `IllegalArgumentException("Key ... not found")` | Key 名称不存在 |
-| `error("already exists id=...")` | Provider ID 重复 |
-| `error("Workspace with name ... already exists")` | Provider 显示名称重复 |
+| 异常 | 条件 | 预防 |
+|------|------|------|
+| `IllegalArgumentException("Unknown LLM provider: ...")` | Provider 类型未注册 | 先调用 `listAvailableProviderTypes()` |
+| `IllegalArgumentException("Key ... not found")` | API Key 名称不存在 | 先调用 `listApiKeyNames()` |
+| `IllegalArgumentException` | `displayName` 与现有 Provider 重复 | 先调用 `listProviders()` 检查 |
 
 ### removeProvider
 
@@ -165,11 +174,15 @@ fun removeProvider(id: UUID)
 
 删除 Provider。
 
+**前置校验：**
+
+- 通过 `listProviders()` 确认 `id` 存在
+
 **异常：**
 
-| 异常 | 条件 |
-|------|------|
-| `error("ProviderData ... not found")` | Provider ID 不存在 |
+| 异常 | 条件 | 预防 |
+|------|------|------|
+| `IllegalStateException("ProviderData ... not found")` | Provider ID 不存在 | 先调用 `listProviders()` |
 
 ### setProviderType
 
@@ -179,12 +192,17 @@ fun setProviderType(id: UUID, type: String)
 
 更新 Provider 类型。
 
+**前置校验：**
+
+- 通过 `listProviders()` 确认 `id` 存在
+- 通过 `listAvailableProviderTypes()` 确认新 `type` 已注册
+
 **异常：**
 
-| 异常 | 条件 |
-|------|------|
-| `IllegalArgumentException("Unknown LLM provider: ...")` | 新类型未注册 |
-| `error("ProviderData ... not found")` | Provider ID 不存在 |
+| 异常 | 条件 | 预防 |
+|------|------|------|
+| `IllegalArgumentException("Unknown LLM provider: ...")` | 新类型未注册 | 先调用 `listAvailableProviderTypes()` |
+| `IllegalStateException("ProviderData ... not found")` | Provider ID 不存在 | 先调用 `listProviders()` |
 
 ### setProviderKey
 
@@ -194,12 +212,17 @@ fun setProviderKey(id: UUID, keyName: String)
 
 更新 Provider 的 API Key。
 
+**前置校验：**
+
+- 通过 `listProviders()` 确认 `id` 存在
+- 通过 `listApiKeyNames()` 确认 `keyName` 存在
+
 **异常：**
 
-| 异常 | 条件 |
-|------|------|
-| `error("Key ... not found")` | Key 名称不存在 |
-| `error("ProviderData ... not found")` | Provider ID 不存在 |
+| 异常 | 条件 | 预防 |
+|------|------|------|
+| `IllegalStateException("Key ... not found")` | Key 名称不存在 | 先调用 `listApiKeyNames()` |
+| `IllegalStateException("ProviderData ... not found")` | Provider ID 不存在 | 先调用 `listProviders()` |
 
 ### setProviderUrl
 
@@ -209,11 +232,15 @@ fun setProviderUrl(id: UUID, url: Url)
 
 更新 Provider 的 URL。
 
+**前置校验：**
+
+- 通过 `listProviders()` 确认 `id` 存在
+
 **异常：**
 
-| 异常 | 条件 |
-|------|------|
-| `error("ProviderData ... not found")` | Provider ID 不存在 |
+| 异常 | 条件 | 预防 |
+|------|------|------|
+| `IllegalStateException("ProviderData ... not found")` | Provider ID 不存在 | 先调用 `listProviders()` |
 
 ### setProviderRule
 
@@ -223,11 +250,15 @@ fun setProviderRule(id: UUID, rules: List<ProviderData.ErrorHandlingRule>)
 
 更新 Provider 的错误处理规则。
 
+**前置校验：**
+
+- 通过 `listProviders()` 确认 `id` 存在
+
 **异常：**
 
-| 异常 | 条件 |
-|------|------|
-| `error("ProviderData ... not found")` | Provider ID 不存在 |
+| 异常 | 条件 | 预防 |
+|------|------|------|
+| `IllegalStateException("ProviderData ... not found")` | Provider ID 不存在 | 先调用 `listProviders()` |
 
 ### setProviderDisplayName
 
@@ -237,12 +268,17 @@ fun setProviderDisplayName(id: UUID, displayName: String)
 
 更新 Provider 的显示名称。
 
+**前置校验：**
+
+- 通过 `listProviders()` 确认 `id` 存在
+- 确保 `displayName` 不与其他 Provider 重复
+
 **异常：**
 
-| 异常 | 条件 |
-|------|------|
-| `error("ProviderData ... not found")` | Provider ID 不存在 |
-| `IllegalArgumentException` | 显示名称已存在 |
+| 异常 | 条件 | 预防 |
+|------|------|------|
+| `IllegalStateException("ProviderData ... not found")` | Provider ID 不存在 | 先调用 `listProviders()` |
+| `IllegalArgumentException` | 显示名称已存在 | 先调用 `listProviders()` 检查 |
 
 ## Model 管理
 
@@ -280,12 +316,15 @@ fun addModel(model: CoreConfig.ProviderConfig.Model)
 
 添加模型。
 
+**前置校验：**
+
+- 确保同一 Provider 下 `displayName` 不重复（通过 `listModels()` 检查）
+
 **异常：**
 
-| 异常 | 条件 |
-|------|------|
-| `IllegalArgumentException` | 模型显示名称已存在 |
-| `error("already exists id=...")` | 模型 ID 重复 |
+| 异常 | 条件 | 预防 |
+|------|------|------|
+| `IllegalArgumentException` | 同 Provider 下 `displayName` 重复 | 先调用 `listModels()` 检查 |
 
 ### removeModel
 
@@ -293,7 +332,7 @@ fun addModel(model: CoreConfig.ProviderConfig.Model)
 fun removeModel(id: UUID)
 ```
 
-删除模型。
+删除模型。ID 不存在时的行为取决于内部实现。
 
 ### updateModelData
 
@@ -303,13 +342,20 @@ fun updateModelData(id: UUID, model: CoreConfig.ProviderConfig.Model)
 
 更新模型数据。
 
+**前置校验：**
+
+- 通过 `listModels()` 确认 `id` 存在
+- 确保更新后的 `displayName` 不与同 Provider 下其他模型重复
+
 **异常：**
 
-| 异常 | 条件 |
-|------|------|
-| `IllegalArgumentException` | 模型显示名称已存在（排除自身） |
+| 异常 | 条件 | 预防 |
+|------|------|------|
+| `IllegalArgumentException` | 同 Provider 下 `displayName` 重复（排除自身） | 先调用 `listModels()` 检查 |
 
 ## API Key 管理
+
+> **注意：** 所有 API Key 操作都需要 SecretAPI 已解锁。操作前请确认 `core.secret.isUnlocked.value == true`。
 
 ### addApiKey
 
@@ -319,12 +365,17 @@ fun addApiKey(key: CoreConfig.ProviderConfig.ApiKey)
 
 添加 API Key。
 
+**前置校验：**
+
+- 确认 `SecretAPI.isUnlocked` 为 `true`
+- 通过 `listApiKeyNames()` 确保名称不重复
+
 **异常：**
 
-| 异常 | 条件 |
-|------|------|
-| `error("Key ... already exists")` | Key 名称已存在 |
-| `check("SecretManager is locked.")` | 密钥管理器未解锁 |
+| 异常 | 条件 | 预防 |
+|------|------|------|
+| `IllegalStateException("Key ... already exists")` | Key 名称已存在 | 先调用 `listApiKeyNames()` |
+| `IllegalStateException("SecretManager is locked.")` | 密钥管理器未解锁 | 先调用 `core.secret.unlock()` |
 
 ### removeApiKey
 
@@ -334,12 +385,19 @@ fun removeApiKey(name: String)
 
 删除 API Key。
 
+**前置校验：**
+
+- 确认 `SecretAPI.isUnlocked` 为 `true`
+- 通过 `listApiKeyNames()` 确认名称存在
+- 通过 `listProviders()` 确认没有 Provider 正在使用该 Key
+
 **异常：**
 
-| 异常 | 条件 |
-|------|------|
-| `error("Key ... not found")` | Key 名称不存在 |
-| `check("SecretManager is locked.")` | 密钥管理器未解锁 |
+| 异常 | 条件 | 预防 |
+|------|------|------|
+| `IllegalStateException("Key ... not found")` | Key 名称不存在 | 先调用 `listApiKeyNames()` |
+| `IllegalStateException("Key ... is currently in use")` | 有 Provider 正在使用该 Key | 先调用 `listProviders()` 检查 `keyId` |
+| `IllegalStateException("SecretManager is locked.")` | 密钥管理器未解锁 | 先调用 `core.secret.unlock()` |
 
 ### listApiKeyNames
 
@@ -382,7 +440,10 @@ config.addModel(CoreConfig.ProviderConfig.Model(
     )
 ))
 
-// API Key 管理
+// API Key 管理（需要先解锁）
+if (!core.secret.isUnlocked.value) {
+    core.secret.unlock("password")
+}
 config.addApiKey(CoreConfig.ProviderConfig.ApiKey("my-key", "sk-..."))
 
 // 设置服务

@@ -23,6 +23,8 @@ val isUnlocked: StateFlow<Boolean>
 
 密钥库解锁状态流。`true` 表示已解锁，`false` 表示未解锁。
 
+> **重要：** `ConfigAPI` 中的 `addApiKey()` 和 `removeApiKey()` 操作要求密钥库已解锁。调用前必须检查此状态。
+
 ## 方法
 
 ### isPasswordEmpty
@@ -31,7 +33,7 @@ val isUnlocked: StateFlow<Boolean>
 fun isPasswordEmpty(): Boolean
 ```
 
-检查是否设置了密码（空密码 vs 有密码）。
+检查是否设置了密码（空密码 vs 有密码）。可用于判断是否需要首次设置密码。
 
 ### unlock
 
@@ -49,10 +51,10 @@ fun unlock(password: String)
 
 **异常：**
 
-| 异常 | 条件 |
-|------|------|
-| `IllegalStateException("Invalid password")` | 密码错误 |
-| `IllegalStateException("GPG command failed: ...")` | GPG 命令执行失败 |
+| 异常 | 条件 | 预防 |
+|------|------|------|
+| `IllegalStateException("Invalid password")` | 密码错误 | 提示用户重新输入 |
+| `IllegalStateException("GPG command failed: ...")` | GPG 命令执行失败 | 检查 GPG 安装和配置 |
 
 **副作用：**
 
@@ -74,12 +76,16 @@ fun changePassword(oldPassword: String, newPassword: String)
 | `oldPassword` | `String` | 旧密码 |
 | `newPassword` | `String` | 新密码 |
 
+**前置校验：**
+
+- 确认 `isUnlocked.value == true`
+
 **异常：**
 
-| 异常 | 条件 |
-|------|------|
-| `IllegalStateException("SecretManager is locked.")` | 未解锁 |
-| `IllegalStateException("Invalid password")` | 旧密码错误 |
+| 异常 | 条件 | 预防 |
+|------|------|------|
+| `IllegalStateException("SecretManager is locked.")` | 未解锁 | 先调用 `unlock()` |
+| `IllegalStateException("Invalid password")` | 旧密码错误 | 提示用户确认旧密码 |
 
 **副作用：**
 

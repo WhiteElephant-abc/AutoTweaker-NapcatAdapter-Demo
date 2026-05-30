@@ -80,7 +80,7 @@ class MyLlmClient : LlmClient {
                 modelId = "my-model",
                 contextWindow = 128000,
                 maxOutputTokens = 4096,
-                price = ModelData.ModelData.TokenPrice(...),
+                price = ModelData.TokenPrice(...),
                 supportsStreaming = true,
                 supportsToolCalls = true,
                 supportsReasoning = false,

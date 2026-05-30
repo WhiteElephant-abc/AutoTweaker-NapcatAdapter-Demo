@@ -1,6 +1,6 @@
 # AutoTweaker API 文档
 
-> 版本: v0.1.0-alpha.13
+> 版本: v0.1.0-alpha.14
 > 源码: [github.com/AutoTweaker/core](https://github.com/AutoTweaker/core/tree/main/api/src/main/kotlin/io/github/autotweaker/api)
 
 ## 概述
@@ -50,6 +50,39 @@ AutoTweaker API 定义了适配器（Adapter）开发所需的全部接口和数
 | Session | 会话上下文、消息、输出、工作区 | [types/session.md](types/session.md) |
 | Shell | Shell 事件、执行、结果 | [types/shell.md](types/shell.md) |
 | Adapter | 适配器信息 | [types/adapter.md](types/adapter.md) |
+
+## 调用规范
+
+### 前置校验原则
+
+调用 CoreAPI 时，调用方需要做以下前置校验以避免异常：
+
+| 场景 | 校验方式 |
+|------|----------|
+| 操作会话/工作区 | 先通过 `listWorkspaces()` 或 `loadData()` 确认 ID 存在 |
+| 添加 Provider/Model/ApiKey | 先通过 `list*()` 方法确认名称唯一 |
+| 修改 Provider | 先通过 `listProviders()` 确认 ID 存在 |
+| 添加/修改/删除 ApiKey | 先确认 `SecretAPI.isUnlocked` 为 `true` |
+| 使用 Provider 类型 | 先通过 `listAvailableProviderTypes()` 确认类型已注册 |
+| 设置配置值 | 优先使用 `set(def, value)` 而非 `set(id, value)` 以获得类型安全 |
+
+### 不应做的校验
+
+Core 内部管理以下状态，调用方**不应**自行检查：
+
+| 状态 | 原因 |
+|------|------|
+| 容器是否运行 | 容器由 Core 按需启动，`isContainerRunning()` 仅供参考 |
+| 工具调用参数格式 | Core 内部的 `ToolCallValidator` 负责验证 |
+| 文件操作路径合法性 | Core 内部的 `FileSystemService` 负责路径解析和校验 |
+| LLM 请求参数 | Core 内部的 `ResilientChat` 负责重试和回退策略 |
+
+### 异常处理策略
+
+| 异常类型 | 含义 | 处理建议 |
+|----------|------|----------|
+| `IllegalStateException` | 状态不合法（ID 不存在、密钥库未解锁等） | 检查前置条件，提示用户 |
+| `IllegalArgumentException` | 参数不合法（名称重复、类型未知等） | 检查输入数据，提示用户 |
 
 ## 快速入门
 

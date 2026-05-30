@@ -45,13 +45,13 @@ fun getDefault(id: String): SettingDef<*>?
 
 **返回值：** 设置定义，不存在返回 `null`
 
-### set (by def)
+### set (by def) — 推荐
 
 ```kotlin
 fun <V : SettingValue> set(def: SettingDef<V>, value: V)
 ```
 
-通过定义设置值。
+通过定义设置值。**类型安全**，推荐使用此方法。
 
 **参数：**
 
@@ -71,13 +71,13 @@ fun <V : SettingValue> set(def: SettingDef<V>, value: V)
 - upsert 到 H2 数据库 `core_settings` 表
 - 更新内存缓存
 
-### set (by id)
+### set (by id) — 不推荐
 
 ```kotlin
 fun set(id: String, value: SettingValue)
 ```
 
-通过 ID 设置值。
+通过 ID 设置值。**不推荐**使用此方法，因为无法在编译时检查类型。
 
 **参数：**
 
@@ -88,10 +88,10 @@ fun set(id: String, value: SettingValue)
 
 **异常：**
 
-| 异常 | 条件 |
-|------|------|
-| `IllegalArgumentException("Unknown setting: ...")` | ID 未注册 |
-| `IllegalArgumentException("Type mismatch for '...': expected ..., got ...")` | 值类型与定义不匹配 |
+| 异常 | 条件 | 预防 |
+|------|------|------|
+| `IllegalArgumentException("Unknown setting: ...")` | ID 未注册 | 通过 `getDefault(id)` 确认 |
+| `IllegalArgumentException("Type mismatch for '...': expected ..., got ...")` | 值类型与定义不匹配 | 使用 `set(def, value)` 避免 |
 
 ### setDescription
 
@@ -147,10 +147,10 @@ val settings = core.config.settingService
 val retries = settings.get(MySettings.MaxRetries())
 println(retries.value)  // 5
 
-// 写入设置
+// 写入设置（推荐：类型安全）
 settings.set(MySettings.MaxRetries(), SettingValue.ValInt(10))
 
-// 通过 ID 操作
+// 通过 ID 操作（不推荐：可能类型不匹配）
 settings.set("com.example.MySettings\$MaxRetries", SettingValue.ValInt(10))
 
 // 更新描述

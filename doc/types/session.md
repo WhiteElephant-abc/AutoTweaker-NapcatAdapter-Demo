@@ -366,7 +366,6 @@ data class WorkspaceData(
 data class WorkspaceMeta(
     val displayName: String,
     val id: UUID = UUID.randomUUID(),
-    val inContainer: Boolean,
     val path: Path
 )
 ```
@@ -374,16 +373,17 @@ data class WorkspaceMeta(
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `displayName` | `String` | 工作区显示名称 |
-| `id` | `UUID` | 工作区 ID |
-| `inContainer` | `Boolean` | 是否在容器中运行 |
+| `id` | `UUID` | 工作区 ID（默认自动生成） |
 | `path` | `Path` | 工作区路径 |
 
 ### 约束
 
 - `path` 必须是已存在的目录
+- `displayName` 不能与现有工作区重复
 
 ### 异常
 
 | 异常 | 条件 |
 |------|------|
-| `IllegalStateException("... is not a directory")` | 路径不是目录 |
+| `IllegalArgumentException("Failed requirement.")` | `displayName` 重复 |
+| `IllegalStateException("... is not a directory")` | `path` 不是目录 |

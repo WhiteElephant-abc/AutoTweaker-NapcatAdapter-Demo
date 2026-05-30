@@ -45,11 +45,19 @@ fun chat(request: CoreLlmRequest): Flow<CoreLlmResult>
 
 **返回值：** `Flow<CoreLlmResult>` 流式聊天结果
 
+**前置校验：**
+
+- 确保至少有一个可用的 LLM Provider 和模型（通过 `ConfigAPI.listProviders()` 和 `ConfigAPI.listModels()` 确认）
+- 确保 `request.model` 对应的模型 ID 存在
+- 若设置了 `fallbackModels`，确保这些模型 ID 也存在
+
 **异常：**
 
 | 异常 | 条件 |
 |------|------|
-| `IllegalStateException` | 所有模型重试耗尽 |
+| `IllegalStateException("All LLM chat retries exhausted without success")` | 所有候选模型和重试都失败 |
+
+**说明：** 非流式请求不会抛异常，而是返回 `ChatMessage.ErrorMessage`。流式请求中的错误会通过 `ErrorMessage` 发射到 Flow 中。`IllegalStateException` 仅在所有重试策略均失败时抛出。
 
 **示例：**
 
@@ -67,6 +75,7 @@ val request = CoreLlmRequest(
 core.chat(request).collect { result ->
     when (val msg = result.result.message) {
         is ChatMessage.AssistantMessage -> println(msg.content)
+        is ChatMessage.ErrorMessage -> System.err.println("错误: ${msg.content}")
         else -> {}
     }
 }
@@ -92,7 +101,9 @@ fun bash(arg: ShellExec): Flow<ShellEvent>
 
 | 异常 | 条件 |
 |------|------|
-| `NoContainerRunningException` | 容器模式下容器未运行 |
+| `IllegalStateException("No container is running. Start a container first.")` | 容器模式（`container = true`）下容器未运行 |
+
+> **注意：** 调用方**不应**在调用 `bash()` 前检查容器是否运行。当 `container = false` 时，命令直接在宿主机执行，不涉及容器。当 `container = true` 时，Core 会自行处理容器状态，如果容器未运行会抛出异常，调用方只需捕获并处理即可。
 
 **示例：**
 
