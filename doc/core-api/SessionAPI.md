@@ -240,6 +240,8 @@ suspend fun send(sessionId: UUID, content: String, images: List<Base64>? = null)
 - 触发 Agent 处理流程
 - Agent 状态从 `FREE` 转为 `PROCESSING`
 
+**说明：** `send` 是 `suspend` 方法。若 Agent 当前正忙（`PROCESSING`/`TOOL_CALLING` 等），调用会挂起等待 Agent 进入可处理状态后再继续，不会丢弃消息。
+
 ### approveToolCall
 
 ```kotlin
@@ -255,7 +257,7 @@ suspend fun approveToolCall(sessionId: UUID, approvals: List<ToolApprove>)
 | `sessionId` | `UUID` | 会话 ID |
 | `approvals` | `List<ToolApprove>` | 审批列表 |
 
-**状态要求：** Agent 必须处于 `WAITING` 状态。在其他状态下调用不会抛异常，但不会有效果。
+**说明：** 若 Agent 当前不处于 `WAITING` 状态，审批数据会在 Agent 内部队列中排队，待 Agent 进入 `WAITING` 状态后自动处理，不会丢弃输入数据。
 
 ## 数据加载
 
