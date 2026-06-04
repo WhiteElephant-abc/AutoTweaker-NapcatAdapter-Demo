@@ -147,8 +147,13 @@ fun trace(kClass: KClass<*>): TraceRecorder
 **示例：**
 
 ```kotlin
-val recorder = core.trace(MyAdapter::class)
-recorder.add("my-namespace", "操作完成")
+val trace = core.trace(NapCatAdapter::class)
+
+// 记录请求
+trace.add("request", "request=$request, model=${request.model}")
+
+// 记录响应
+trace.add("response", "result=$result, chatId=$chatId")
 ```
 
 ---

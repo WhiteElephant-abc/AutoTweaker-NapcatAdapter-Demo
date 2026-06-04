@@ -28,7 +28,11 @@ suspend fun add(namespace: String, content: String)
 **示例：**
 
 ```kotlin
-val recorder = core.trace(MyAdapter::class)
-recorder.add("session", "用户登录成功")
-recorder.add("llm", "请求发送到模型")
+val trace = core.trace(NapCatAdapter::class)
+
+// 记录 LLM 请求
+trace.add("request", "request=$request, model=${request.model}, chatId=$chatId")
+
+// 记录 LLM 响应
+trace.add("response", "result=$result, chatId=$chatId")
 ```
