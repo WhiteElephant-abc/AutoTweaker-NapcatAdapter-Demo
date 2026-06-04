@@ -1,5 +1,6 @@
 package io.github.autotweaker.demo.adapter.napcat.ws
 
+import io.github.autotweaker.demo.adapter.napcat.NapCatAdapter
 import io.github.autotweaker.demo.adapter.napcat.model.event.*
 import io.ktor.client.*
 import io.ktor.client.plugins.websocket.*
@@ -29,6 +30,7 @@ class NapCatWsClientImpl(
 ) : NapCatApiImpl(json), NapCatWsClient {
 
     private val logger = LoggerFactory.getLogger(NapCatWsClientImpl::class.java)
+    private val trace = NapCatAdapter.core.trace(NapCatWsClientImpl::class)
 
     @Volatile private var wsSession: WebSocketSession? = null
     @Volatile private var client: HttpClient? = null
@@ -82,10 +84,9 @@ class NapCatWsClientImpl(
 
                     try {
                         for (frame in incoming) {
-                            logger.debug("Received frame: {}", frame)
                             if (frame is Frame.Text) {
                                 val text = frame.readText()
-                                logger.debug("Received text: {}", text)
+                                trace.add("response", text)
                                 launch {
                                     handleMessage(text)
                                 }
@@ -262,7 +263,7 @@ class NapCatWsClientImpl(
             put("echo", echo)
         }
 
-        logger.debug("Sending: {}", request)
+        trace.add("request", "action=$action, echo=$echo, params=$params")
         val channel = Channel<JsonObject>(1)
         pendingRequests[echo] = channel
 
