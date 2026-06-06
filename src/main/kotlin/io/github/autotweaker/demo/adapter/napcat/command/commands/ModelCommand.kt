@@ -128,7 +128,7 @@ class ModelCommand : Command {
         val providerMeta = try {
             context.core.config.getProviderMeta(provider.type)
         } catch (e: Exception) {
-            trace.add("e", e.toString())
+            trace.add("e", e.stackTraceToString())
             return "获取提供商元数据失败: ${e.message}"
         }
 
@@ -157,7 +157,7 @@ class ModelCommand : Command {
             trace.add("model_add", model.toString())
             "模型已创建: $displayName\n提供商: $providerName\n模型ID: $modelId"
         } catch (e: Exception) {
-            trace.add("e", e.toString())
+            trace.add("e", e.stackTraceToString())
             "创建模型失败: ${e.message}"
         }
     }
@@ -189,7 +189,7 @@ class ModelCommand : Command {
             context.core.config.removeModel(model.data.id)
             "已删除模型: ${model.data.displayName}"
         } catch (e: Exception) {
-            trace.add("e", e.toString())
+            trace.add("e", e.stackTraceToString())
             "删除模型失败: ${e.message}"
         }
     }
@@ -210,7 +210,7 @@ class ModelCommand : Command {
                 context.core.session.updateConfig(handle.id, config.copy(model = modelId))
                 trace.add("session_config_update", "session=${handle.id}, config=${config.copy(model = modelId)}")
             } catch (e: Exception) {
-                trace.add("e", e.toString())
+                trace.add("e", e.stackTraceToString())
                 return "我的主模型已设置为: ${getModelDisplayName(context, modelId)}，但当前会话更新失败: ${e.message}"
             }
             return "我的主模型已设置为: ${getModelDisplayName(context, modelId)}，当前会话已生效"

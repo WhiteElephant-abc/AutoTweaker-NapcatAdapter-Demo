@@ -33,7 +33,7 @@ class ExitCommand : Command {
             }
             "已停止并退出会话"
         } catch (e: Exception) {
-            trace.add("e", e.toString())
+            trace.add("e", e.stackTraceToString())
             "退出失败，请稍后重试"
         }
     }

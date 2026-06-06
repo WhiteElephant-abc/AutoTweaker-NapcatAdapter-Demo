@@ -66,7 +66,7 @@ class SessionListener(
             true
         } catch (e: Exception) {
             logger.warn("拒绝待审批工具调用失败: session={}", sessionId, e)
-            trace.add("e", e.toString())
+            trace.add("e", e.stackTraceToString())
             false
         }
     }
@@ -88,7 +88,7 @@ class SessionListener(
             core.session.getHandle(sessionId)
         } catch (e: Exception) {
             logger.warn("Failed to get handle for session {}", sessionId, e)
-            trace.add("e", e.toString())
+            trace.add("e", e.stackTraceToString())
             return
         }
 
@@ -162,7 +162,7 @@ class SessionListener(
             pendingToolCalls.remove(handleId)
             "已审批全部 ${callIds.size} 个工具调用"
         } catch (e: Exception) {
-            trace.add("e", e.toString())
+            trace.add("e", e.stackTraceToString())
             "审批失败: ${e.message}"
         }
     }
@@ -289,7 +289,7 @@ class SessionListener(
         val handle = try {
             core.session.getHandle(sessionId)
         } catch (e: Exception) {
-            trace.add("e", e.toString())
+            trace.add("e", e.stackTraceToString())
             return null
         }
         val context = handle.context.value

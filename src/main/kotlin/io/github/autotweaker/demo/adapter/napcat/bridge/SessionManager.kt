@@ -95,7 +95,7 @@ class SessionManager(
             core.session.getHandle(sessionId)
         } catch (e: Exception) {
             logger.warn("Failed to get handle for session {}", sessionId, e)
-            trace.add("e", e.toString())
+            trace.add("e", e.stackTraceToString())
             null
         }
     }
@@ -265,7 +265,7 @@ class SessionManager(
                         core.session.create(workspace.meta.id, config)
                     } catch (e: Exception) {
                         logger.warn("Failed to create session with workspace {}, falling back to default", selectedWorkspaceId, e)
-                        trace.add("e", e.toString())
+                        trace.add("e", e.stackTraceToString())
                         core.session.create(config)
                     }
                 } else {
@@ -290,7 +290,7 @@ class SessionManager(
             try {
                 core.session.create(workspace.meta.id, config)
             } catch (e: IllegalStateException) {
-                trace.add("e", e.toString())
+                trace.add("e", e.stackTraceToString())
                 if (e.message?.contains("directory does not exist") == true) {
                     throw IllegalStateException("容器工作区目录不存在: ${workspace.meta.path}，请联系操作员检查")
                 }

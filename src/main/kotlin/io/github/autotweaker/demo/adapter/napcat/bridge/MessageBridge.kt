@@ -182,7 +182,7 @@ class MessageBridge(
                 sendReply(groupId, userId, "已自动创建并进入会话")
             } catch (e: Exception) {
                 logger.error("Failed to auto-create session for user {}", userId, e)
-                trace.add("e", e.toString())
+                trace.add("e", e.stackTraceToString())
                 sendReply(groupId, userId, "无法自动创建会话，请稍后重试")
                 return
             }
@@ -214,7 +214,7 @@ class MessageBridge(
             trace.add("session_send", "session=${handle.id}, message=$messageWithContext")
         } catch (e: Exception) {
             logger.error("Failed to send message to session {}", handle.id, e)
-            trace.add("e", e.toString())
+            trace.add("e", e.stackTraceToString())
             sendReply(groupId, userId, "消息发送失败，请稍后重试")
         }
     }
@@ -255,7 +255,7 @@ class MessageBridge(
             }
         } catch (e: Exception) {
             logger.error("Failed to send reply to user {} group {}", userId, groupId, e)
-            trace.add("e", e.toString())
+            trace.add("e", e.stackTraceToString())
         }
     }
 
