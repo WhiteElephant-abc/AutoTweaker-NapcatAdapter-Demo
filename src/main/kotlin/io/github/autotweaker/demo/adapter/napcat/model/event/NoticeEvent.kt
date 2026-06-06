@@ -162,7 +162,7 @@ data class GroupUploadNoticeEvent(
         val id: String,
         val name: String,
         val size: Long,
-        val url: String
+        val url: String = ""
     )
 }
 
