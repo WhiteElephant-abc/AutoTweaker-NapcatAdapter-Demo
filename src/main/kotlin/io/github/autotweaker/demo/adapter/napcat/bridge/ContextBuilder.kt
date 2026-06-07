@@ -140,7 +140,7 @@ class ContextBuilder(
             }
 
             contextBuilder.appendLine("</context>")
-            contextBuilder.appendLine("<environment>用户所在平台：QQ，请注意输出格式</environment>")
+            contextBuilder.appendLine("<environment>用户所在平台：QQ，请减少markdown标记</environment>")
             contextBuilder.append(text)
 
             val result = contextBuilder.toString()
