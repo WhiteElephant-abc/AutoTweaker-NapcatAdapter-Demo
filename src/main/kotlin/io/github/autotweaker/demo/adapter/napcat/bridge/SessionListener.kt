@@ -7,6 +7,9 @@ import io.github.autotweaker.api.types.session.SessionContext
 import io.github.autotweaker.api.types.session.SessionContextIndex
 import io.github.autotweaker.api.types.session.SessionMessage
 import io.github.autotweaker.api.types.session.SessionOutput
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -179,8 +182,12 @@ class SessionListener(
                     val prompt = buildString {
                         appendLine("工具调用请求:")
                         sessionOutput.requests.forEachIndexed { index, req ->
-                            appendLine("  ${index + 1}. ${req.name}(${req.arguments})")
-                            req.reason?.let { appendLine("     原因: $it") }
+                            appendLine("  ${index + 1}. ${req.name}")
+                            formatArguments(req.arguments)?.let { lines ->
+                                lines.forEach { line ->
+                                    appendLine("     $line")
+                                }
+                            }
                         }
                         appendLine()
                         appendLine("使用 /approve <序号> 审批")
@@ -318,5 +325,37 @@ class SessionListener(
         }
 
         return count
+    }
+
+    private fun formatArguments(arguments: String): List<String>? {
+        return try {
+            val lines = mutableListOf<String>()
+            appendJson(Json.parseToJsonElement(arguments).jsonObject, lines, "")
+            lines
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun appendJson(
+        obj: kotlinx.serialization.json.JsonObject,
+        lines: MutableList<String>,
+        indent: String
+    ) {
+        obj.forEach { (key, value) ->
+            when {
+                value is kotlinx.serialization.json.JsonObject -> {
+                    lines.add("$indent$key:")
+                    appendJson(value, lines, "$indent  ")
+                }
+                value is kotlinx.serialization.json.JsonArray -> {
+                    lines.add("$indent$key:")
+                    value.forEach { item ->
+                        lines.add("$indent  - ${item.jsonPrimitive.content}")
+                    }
+                }
+                else -> lines.add("$indent$key: ${value.jsonPrimitive.content}")
+            }
+        }
     }
 }
