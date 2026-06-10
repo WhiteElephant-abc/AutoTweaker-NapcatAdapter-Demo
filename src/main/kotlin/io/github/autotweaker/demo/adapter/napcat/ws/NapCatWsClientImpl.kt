@@ -91,7 +91,11 @@ class NapCatWsClientImpl(
                             for (frame in incoming) {
                                 if (frame is Frame.Text) {
                                     val text = frame.readText()
-                                    trace.add("response", text)
+                                    try {
+                                        trace.add("response", text)
+                                    } catch (e: CancellationException) {
+                                        throw e
+                                    } catch (_: Throwable) { }
                                     launch {
                                         try {
                                             handleMessage(text)
