@@ -2,6 +2,7 @@ package io.github.autotweaker.demo.adapter.napcat.command.commands
 
 import io.github.autotweaker.demo.adapter.napcat.command.Command
 import io.github.autotweaker.demo.adapter.napcat.command.CommandContext
+import io.github.autotweaker.api.trace.TraceRecorder
 import io.github.autotweaker.demo.adapter.napcat.permission.Role
 import org.slf4j.LoggerFactory
 import java.util.UUID
@@ -14,6 +15,7 @@ import java.util.UUID
 class EnterCommand : Command {
 
     private val logger = LoggerFactory.getLogger(this::class.java)
+    private lateinit var trace: TraceRecorder
 
     override val name = "enter"
     override val description = "进入指定会话"
@@ -21,6 +23,7 @@ class EnterCommand : Command {
     override val requiredRole = Role.USER
 
     override suspend fun execute(context: CommandContext): String {
+        if (!::trace.isInitialized) trace = context.core.trace(this::class)
         if (context.args.isEmpty()) {
             return "用法: $usage"
         }
@@ -28,6 +31,7 @@ class EnterCommand : Command {
         val sessionId = try {
             UUID.fromString(context.args[0])
         } catch (e: IllegalArgumentException) {
+            trace.exception(e)
             return "无效的会话 ID: ${context.args[0]}"
         }
 
@@ -35,9 +39,11 @@ class EnterCommand : Command {
             context.sessionManager.enterSession(context.userId, sessionId)
             "已进入会话: $sessionId"
         } catch (e: IllegalStateException) {
+            trace.exception(e)
             logger.warn("Failed to enter session  sessionId={}", sessionId, e)
             "会话恢复失败: ${e.message}"
         } catch (e: Exception) {
+            trace.exception(e)
             logger.warn("Failed to enter session  sessionId={}", sessionId, e)
             "会话不存在: $sessionId"
         }

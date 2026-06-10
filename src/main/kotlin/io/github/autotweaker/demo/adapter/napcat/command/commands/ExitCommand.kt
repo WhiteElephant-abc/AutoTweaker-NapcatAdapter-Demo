@@ -25,15 +25,13 @@ class ExitCommand : Command {
         val handle = context.sessionManager.getActiveSessionHandle(context.userId)
             ?: return "当前没有活跃会话"
 
-        return try {
+        return trace.catching {
             try {
                 context.core.session.stop(handle.id)
             } finally {
                 context.sessionManager.exitSession(context.userId)
             }
             "已停止并退出会话"
-        } catch (e: Exception) {
-            "退出失败，请稍后重试"
-        }
+        }.getOrElse { "退出失败，请稍后重试" }
     }
 }

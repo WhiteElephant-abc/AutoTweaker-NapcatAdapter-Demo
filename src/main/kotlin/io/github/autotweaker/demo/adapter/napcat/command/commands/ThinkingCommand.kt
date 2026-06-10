@@ -52,10 +52,10 @@ class ThinkingCommand : Command {
         val handle = context.sessionManager.getActiveSessionHandle(context.userId)
         if (handle != null) {
             val config = handle.data.value.config
-            try {
+            trace.catching {
                 context.core.session.updateConfig(handle.id, config.copy(thinking = enabled))
                 trace.add("session_config_update", "session=${handle.id}, config=${config.copy(thinking = enabled)}")
-            } catch (e: Exception) {
+            }.onFailure { e ->
                 logger.debug("Failed to update thinking config  sessionId={}", handle.id, e)
             }
             return "思考模式已$state，当前会话已生效"

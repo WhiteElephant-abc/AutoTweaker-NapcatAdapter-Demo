@@ -1,5 +1,6 @@
 package io.github.autotweaker.demo.adapter.napcat.command.commands
 
+import io.github.autotweaker.api.trace.TraceRecorder
 import io.github.autotweaker.demo.adapter.napcat.command.Command
 import io.github.autotweaker.demo.adapter.napcat.command.CommandContext
 import io.github.autotweaker.demo.adapter.napcat.permission.Role
@@ -13,12 +14,15 @@ import io.github.autotweaker.demo.adapter.napcat.permission.Role
  */
 class SessionCommand : Command {
 
+    private lateinit var trace: TraceRecorder
+
     override val name = "session"
     override val description = "管理会话"
     override val usage = "/session [list]"
     override val requiredRole = Role.USER
 
     override suspend fun execute(context: CommandContext): String {
+        if (!::trace.isInitialized) trace = context.core.trace(this::class)
         if (context.args.isEmpty()) {
             return showMySession(context)
         }
@@ -35,9 +39,9 @@ class SessionCommand : Command {
             return "你没有活跃的会话"
         }
 
-        val handle = try {
+        val handle = trace.catching {
             context.core.session.getHandle(sessionId)
-        } catch (e: Exception) {
+        }.getOrElse {
             context.sessionManager.clearActiveSession(context.userId)
             return "你没有活跃的会话"
         }

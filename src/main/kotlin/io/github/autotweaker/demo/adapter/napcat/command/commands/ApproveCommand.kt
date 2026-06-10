@@ -50,20 +50,20 @@ class ApproveCommand : Command {
             reason = context.args.joinToString(" ")
         }
 
-        val callId = try {
+        val callId = trace.catching {
             context.messageBridge.getPendingCallId(handle.id, index)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn("Failed to get pending call id  sessionId={}", handle.id, e)
             null
         } ?: return "无效的序号: $index"
 
-        return try {
+        return trace.catching {
             val approvals = listOf(ToolApprove(callId = callId, reason = reason, approved = true))
             context.core.session.approveToolCall(handle.id, approvals)
             context.messageBridge.removePendingCall(handle.id, callId)
             trace.add("session_approve", "session=${handle.id}, approvals=$approvals")
             "已审批工具调用: $callId"
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.error("Failed to approve tool call  sessionId={}  callId={}", handle.id, callId, e)
             "审批失败，请稍后重试"
         }
