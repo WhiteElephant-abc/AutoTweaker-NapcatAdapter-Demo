@@ -183,11 +183,15 @@ class SessionListener(
                         appendLine("工具调用请求:")
                         sessionOutput.requests.forEachIndexed { index, req ->
                             appendLine("  ${index + 1}. ${req.name}")
-                            formatArguments(req.arguments)?.let { lines ->
-                                lines.forEach { line ->
+                            val argsLines = formatArguments(req.arguments)
+                            if (argsLines != null) {
+                                argsLines.forEach { line ->
                                     appendLine("     $line")
                                 }
+                            } else if (req.arguments.isNotBlank()) {
+                                appendLine("     参数: ${req.arguments}")
                             }
+                            req.reason?.let { appendLine("     原因: $it") }
                         }
                         appendLine()
                         appendLine("使用 /approve <序号> 审批")
@@ -351,7 +355,16 @@ class SessionListener(
                 value is kotlinx.serialization.json.JsonArray -> {
                     lines.add("$indent$key:")
                     value.forEach { item ->
-                        lines.add("$indent  - ${item.jsonPrimitive.content}")
+                        when (item) {
+                            is kotlinx.serialization.json.JsonObject -> {
+                                lines.add("$indent  -")
+                                appendJson(item, lines, "$indent    ")
+                            }
+                            is kotlinx.serialization.json.JsonArray -> {
+                                lines.add("$indent  - $item")
+                            }
+                            else -> lines.add("$indent  - ${item.jsonPrimitive.content}")
+                        }
                     }
                 }
                 else -> lines.add("$indent$key: ${value.jsonPrimitive.content}")
