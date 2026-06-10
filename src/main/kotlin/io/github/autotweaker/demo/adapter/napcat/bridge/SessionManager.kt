@@ -91,9 +91,9 @@ class SessionManager(
 
     suspend fun getActiveSessionHandle(userId: Long): SessionHandle? {
         val sessionId = activeSessions[userId] ?: return null
-        return try {
+        return trace.catching {
             core.session.getHandle(sessionId)
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             logger.warn("Failed to get session handle  sessionId={}", sessionId, e)
             null
         }
@@ -260,9 +260,9 @@ class SessionManager(
                 val workspace = core.session.listWorkspaces()
                     .find { it.meta.id == selectedWorkspaceId }
                 if (workspace != null) {
-                    try {
+                    val sessionId = trace.catching {
                         core.session.create(workspace.meta.id, config)
-                    } catch (e: Exception) {
+                    }.getOrElse { e ->
                         logger.warn("Failed to create session  workspaceId={}  falling back to default", selectedWorkspaceId, e)
                         core.session.create(config)
                     }
@@ -288,6 +288,7 @@ class SessionManager(
             try {
                 core.session.create(workspace.meta.id, config)
             } catch (e: IllegalStateException) {
+                trace.exception(e)
                 if (e.message?.contains("directory does not exist") == true) {
                     throw IllegalStateException("容器工作区目录不存在: ${workspace.meta.path}，请联系操作员检查")
                 }
