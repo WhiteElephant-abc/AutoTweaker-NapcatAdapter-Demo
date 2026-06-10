@@ -100,7 +100,7 @@ class NapCatWsClientImpl(
                             logger.error("WebSocket error  host={}  port={}", host, port, e)
                             errorHandler?.invoke(e)
                         } finally {
-                            logger.info("WebSocket closed  host={}  port={}", host, port)
+                            logger.warn("WebSocket closed  host={}  port={}  closeReason={}", host, port, closeReason)
                             wsSession = null
                             pendingRequests.forEach { (_, channel) ->
                                 channel.close()
