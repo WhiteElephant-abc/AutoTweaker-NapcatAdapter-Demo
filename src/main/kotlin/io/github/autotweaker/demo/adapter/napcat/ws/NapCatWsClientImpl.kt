@@ -31,6 +31,7 @@ class NapCatWsClientImpl(
 ) : NapCatApiImpl(json), NapCatWsClient {
 
     private val logger = LoggerFactory.getLogger(this::class.java)
+    private val trace = NapCatAdapter.core.trace(this::class)
 
     @Volatile private var wsSession: WebSocketSession? = null
     @Volatile private var client: HttpClient? = null
@@ -90,6 +91,7 @@ class NapCatWsClientImpl(
                             for (frame in incoming) {
                                 if (frame is Frame.Text) {
                                     val text = frame.readText()
+                                    trace.add("response", text)
                                     launch {
                                         try {
                                             handleMessage(text)
@@ -290,6 +292,7 @@ class NapCatWsClientImpl(
             put("echo", echo)
         }
 
+        trace.add("request", "action=$action, echo=$echo, params=$params")
         val channel = Channel<JsonObject>(1)
         pendingRequests[echo] = channel
 

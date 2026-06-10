@@ -65,7 +65,6 @@ class ApproveCommand : Command {
             "已审批工具调用: $callId"
         } catch (e: Exception) {
             logger.error("Failed to approve tool call  sessionId={}  callId={}", handle.id, callId, e)
-            trace.add("e", e.stackTraceToString())
             "审批失败，请稍后重试"
         }
     }

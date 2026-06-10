@@ -162,7 +162,6 @@ class WorkspaceCommand : Command {
             trace.add("workspace_create", meta.toString())
             "工作区已创建: ${workspace.meta.displayName}\n路径: ${workspace.meta.path}"
         } catch (e: Exception) {
-            trace.add("e", e.stackTraceToString())
             "创建工作区失败: ${e.message}"
         }
     }
@@ -210,7 +209,6 @@ class WorkspaceCommand : Command {
             context.core.session.deleteWorkspace(workspace.meta.id)
             "已删除工作区: ${workspace.meta.displayName}"
         } catch (e: Exception) {
-            trace.add("e", e.stackTraceToString())
             "删除工作区失败: ${e.message}"
         }
     }

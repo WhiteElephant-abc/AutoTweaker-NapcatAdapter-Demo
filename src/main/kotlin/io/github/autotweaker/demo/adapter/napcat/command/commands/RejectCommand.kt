@@ -65,7 +65,6 @@ class RejectCommand : Command {
             "已拒绝工具调用: $callId"
         } catch (e: Exception) {
             logger.error("Failed to reject tool call  sessionId={}  callId={}", handle.id, callId, e)
-            trace.add("e", e.stackTraceToString())
             "拒绝失败，请稍后重试"
         }
     }

@@ -57,7 +57,6 @@ class ThinkingCommand : Command {
                 trace.add("session_config_update", "session=${handle.id}, config=${config.copy(thinking = enabled)}")
             } catch (e: Exception) {
                 logger.debug("Failed to update thinking config  sessionId={}", handle.id, e)
-                trace.add("e", e.stackTraceToString())
             }
             return "思考模式已$state，当前会话已生效"
         }
