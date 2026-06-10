@@ -175,11 +175,11 @@ class MessageBridge(
 
         // 无活跃会话，自动创建（清理旧会话上下文）
         if (handle == null) {
-            try {
+            trace.catching {
                 sessionManager.getActiveSession(userId)?.let { sessionContexts.remove(it) }
                 handle = sessionManager.autoCreateSession(userId)
                 sendReply(groupId, userId, "已自动创建并进入会话")
-            } catch (e: Exception) {
+            }.onFailure { e ->
                 logger.error("Failed to auto-create session  userId={}", userId, e)
                 sendReply(groupId, userId, "无法自动创建会话，请稍后重试")
                 return
@@ -197,7 +197,7 @@ class MessageBridge(
             return
         }
 
-        try {
+        trace.catching {
             // 检测消息链中的合并转发
             val forwardSegments = messageChain?.filterIsInstance<MessageSegment.Forward>() ?: emptyList()
             val processedText = if (forwardSegments.isNotEmpty()) {
@@ -210,7 +210,7 @@ class MessageBridge(
             val messageWithContext = contextBuilder.buildMessageWithContext(groupId, userId, processedText)
             core.session.send(handle.id, messageWithContext)
             trace.add("session_send", "session=${handle.id}, message=$messageWithContext")
-        } catch (e: Exception) {
+        }.onFailure { e ->
             logger.error("Failed to send message  sessionId={}", handle.id, e)
             sendReply(groupId, userId, "消息发送失败，请稍后重试")
         }
@@ -243,14 +243,14 @@ class MessageBridge(
 
     private suspend fun sendReply(groupId: Long?, userId: Long, text: String) {
         if (text.isEmpty()) return
-        try {
+        trace.catching {
             val message = listOf(MessageSegment.Text(text))
             if (groupId != null) {
                 napCat.sendGroupMessage(groupId, message)
             } else {
                 napCat.sendPrivateMessage(userId, message)
             }
-        } catch (e: Exception) {
+        }.onFailure { e ->
             logger.error("Failed to send reply  userId={}  groupId={}", userId, groupId, e)
         }
     }
