@@ -116,9 +116,6 @@ class NapCatAdapter : Adapter {
         // 初始化命令系统
         val commandRegistry = CommandRegistry().apply {
             register(HelpCommand(this))
-            register(NewCommand())
-            register(EnterCommand())
-            register(ExitCommand())
             register(SessionCommand())
             register(ApproveCommand())
             register(RejectCommand())
