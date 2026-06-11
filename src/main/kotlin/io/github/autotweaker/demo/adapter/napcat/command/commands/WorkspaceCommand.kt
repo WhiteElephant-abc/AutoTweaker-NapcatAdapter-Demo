@@ -202,12 +202,6 @@ class WorkspaceCommand : Command {
             return "不能删除默认工作区"
         }
 
-        // 检查工作区是否有关联会话
-        val sessionIds = workspace.sessionIds.orEmpty()
-        if (sessionIds.isNotEmpty()) {
-            return "该工作区下有 ${sessionIds.size} 个会话，请先删除或迁移会话后再删除工作区"
-        }
-
         return try {
             context.core.session.deleteWorkspace(workspace.meta.id)
             "已删除工作区: ${workspace.meta.displayName}"
