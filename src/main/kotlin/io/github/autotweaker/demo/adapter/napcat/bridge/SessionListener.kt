@@ -325,57 +325,59 @@ class SessionListener(
         val toolName = req.toolName
         val args = req.validatedArgs
         val reason = req.reason
-        val reasonSuffix = if (reason.isNotBlank()) "（$reason）" else ""
 
-        if (args == null) return "请求${toolName}$reasonSuffix"
+        if (args == null) return "请求${toolName}"
 
         val toolKey = toolName.substringBefore("-")
-        val desc = trace.catching {
+        return trace.catching {
             when (toolKey) {
-                "qq" -> renderQqArgs(Json.decodeFromJsonElement(QqToolFunctions.Args.serializer(), args))
-                "bash" -> renderBashArgs(Json.decodeFromJsonElement(BashArgs.serializer(), args))
-                "read" -> renderReadArgs(Json.decodeFromJsonElement(ReadArgs.serializer(), args))
-                else -> null
+                "qq" -> "请求${renderQqArgs(Json.decodeFromJsonElement(QqToolFunctions.Args.serializer(), args), reason)}"
+                "bash" -> "请求${renderBashArgs(Json.decodeFromJsonElement(BashArgs.serializer(), args), reason)}"
+                "read" -> "请求${renderReadArgs(Json.decodeFromJsonElement(ReadArgs.serializer(), args), reason)}"
+                else -> "请求${toolName}"
             }
-        }.getOrNull()
+        }.getOrElse { "请求${toolName}" }
+    }
 
-        return if (desc != null) {
-            "请求${desc}$reasonSuffix"
-        } else {
-            "请求${toolName}$reasonSuffix"
+    private fun renderQqArgs(args: QqToolFunctions.Args, reason: String): String {
+        val suffix = (if (reason.isNotBlank()) "（$reason）" else "")
+        return when (args) {
+            is QqToolFunctions.SendMessage -> "发送私聊消息给 ${args.userId}: ${args.message.take(50)}$suffix"
+            is QqToolFunctions.SendGroupMessage -> "发送群消息到 ${args.groupId}: ${args.message.take(50)}$suffix"
+            is QqToolFunctions.DeleteMessage -> "撤回消息 ${args.messageId}$suffix"
+            is QqToolFunctions.GetMessage -> "获取消息详情 ${args.messageId}$suffix"
+            is QqToolFunctions.GetFriendList -> "获取好友列表$suffix"
+            is QqToolFunctions.GetGroupList -> "获取群列表$suffix"
+            is QqToolFunctions.GetGroupMemberList -> "获取群 ${args.groupId} 的成员列表$suffix"
+            is QqToolFunctions.GetGroupMemberInfo -> "获取群 ${args.groupId} 中用户 ${args.userId} 的信息$suffix"
+            is QqToolFunctions.GetGroupMsgHistory -> "获取群 ${args.groupId} 的最近 ${args.count} 条消息$suffix"
+            is QqToolFunctions.GetPrivateMsgHistory -> "获取与 ${args.userId} 的最近 ${args.count} 条私聊消息$suffix"
+            is QqToolFunctions.KickGroupMember -> "将用户 ${args.userId} 踢出群 ${args.groupId}$suffix"
+            is QqToolFunctions.BanGroupMember -> "禁言用户 ${args.userId} ${args.duration} 秒（群 ${args.groupId}）$suffix"
+            is QqToolFunctions.SetGroupCard -> "设置群 ${args.groupId} 中用户 ${args.userId} 的名片为「${args.card}」$suffix"
+            is QqToolFunctions.SetGroupName -> "设置群 ${args.groupId} 的名称为「${args.groupName}」$suffix"
+            is QqToolFunctions.SetGroupAdmin -> if (args.enable) "设置用户 ${args.userId} 为群 ${args.groupId} 管理员$suffix" else "取消用户 ${args.userId} 在群 ${args.groupId} 的管理员$suffix"
+            is QqToolFunctions.GetLoginInfo -> "获取机器人登录信息$suffix"
+            is QqToolFunctions.GetStatus -> "获取机器人状态$suffix"
+            is QqToolFunctions.GetVersionInfo -> "获取版本信息$suffix"
+            is QqToolFunctions.GetImage -> "获取图片 ${args.file}$suffix"
+            is QqToolFunctions.GetRecord -> "获取语音 ${args.file}$suffix"
+            is QqToolFunctions.GetFile -> "获取文件 ${args.file}$suffix"
+            is QqToolFunctions.GetForwardMsg -> "获取合并转发消息 ${args.id}$suffix"
         }
     }
 
-    private fun renderQqArgs(args: QqToolFunctions.Args): String = when (args) {
-        is QqToolFunctions.SendMessage -> "发送私聊消息给 ${args.userId}: ${args.message.take(50)}"
-        is QqToolFunctions.SendGroupMessage -> "发送群消息到 ${args.groupId}: ${args.message.take(50)}"
-        is QqToolFunctions.DeleteMessage -> "撤回消息 ${args.messageId}"
-        is QqToolFunctions.GetMessage -> "获取消息详情 ${args.messageId}"
-        is QqToolFunctions.GetFriendList -> "获取好友列表"
-        is QqToolFunctions.GetGroupList -> "获取群列表"
-        is QqToolFunctions.GetGroupMemberList -> "获取群 ${args.groupId} 的成员列表"
-        is QqToolFunctions.GetGroupMemberInfo -> "获取群 ${args.groupId} 中用户 ${args.userId} 的信息"
-        is QqToolFunctions.GetGroupMsgHistory -> "获取群 ${args.groupId} 的最近 ${args.count} 条消息"
-        is QqToolFunctions.GetPrivateMsgHistory -> "获取与 ${args.userId} 的最近 ${args.count} 条私聊消息"
-        is QqToolFunctions.KickGroupMember -> "将用户 ${args.userId} 踢出群 ${args.groupId}"
-        is QqToolFunctions.BanGroupMember -> "禁言用户 ${args.userId} ${args.duration} 秒（群 ${args.groupId}）"
-        is QqToolFunctions.SetGroupCard -> "设置群 ${args.groupId} 中用户 ${args.userId} 的名片为「${args.card}」"
-        is QqToolFunctions.SetGroupName -> "设置群 ${args.groupId} 的名称为「${args.groupName}」"
-        is QqToolFunctions.SetGroupAdmin -> if (args.enable) "设置用户 ${args.userId} 为群 ${args.groupId} 管理员" else "取消用户 ${args.userId} 在群 ${args.groupId} 的管理员"
-        is QqToolFunctions.GetLoginInfo -> "获取机器人登录信息"
-        is QqToolFunctions.GetStatus -> "获取机器人状态"
-        is QqToolFunctions.GetVersionInfo -> "获取版本信息"
-        is QqToolFunctions.GetImage -> "获取图片 ${args.file}"
-        is QqToolFunctions.GetRecord -> "获取语音 ${args.file}"
-        is QqToolFunctions.GetFile -> "获取文件 ${args.file}"
-        is QqToolFunctions.GetForwardMsg -> "获取合并转发消息 ${args.id}"
+    private fun renderBashArgs(args: BashArgs, reason: String): String {
+        val head = if (reason.isNotBlank()) "运行以下命令（$reason）" else "运行以下命令"
+        return "$head\n${args.command}"
     }
 
-    private fun renderBashArgs(args: BashArgs): String = "运行以下命令\n${args.command}"
-
-    private fun renderReadArgs(args: ReadArgs): String = when (args) {
-        is ReadArgs.File -> "读取文件 ${args.filePath} 的第 ${args.startLine}-${args.endLine} 行"
-        is ReadArgs.Summarize -> "总结文件 ${args.filePath} 的第 ${args.startLine}-${args.endLine} 行"
-        is ReadArgs.Unicode -> "读取文件 ${args.filePath} 的前 ${args.maxChars} 字符"
+    private fun renderReadArgs(args: ReadArgs, reason: String): String {
+        val suffix = (if (reason.isNotBlank()) "（$reason）" else "")
+        return when (args) {
+            is ReadArgs.File -> "读取文件 ${args.filePath} 的第 ${args.startLine}-${args.endLine} 行$suffix"
+            is ReadArgs.Summarize -> "总结文件 ${args.filePath} 的第 ${args.startLine}-${args.endLine} 行$suffix"
+            is ReadArgs.Unicode -> "读取文件 ${args.filePath} 的前 ${args.maxChars} 字符$suffix"
+        }
     }
 }
