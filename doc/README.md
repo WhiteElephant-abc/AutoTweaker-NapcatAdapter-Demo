@@ -51,6 +51,7 @@ AutoTweaker API 定义了适配器（Adapter）开发所需的全部接口和数
 | Session | 会话上下文、消息、输出、工作区 | [types/session.md](types/session.md) |
 | Shell | Shell 事件、执行、结果 | [types/shell.md](types/shell.md) |
 | Trace | 追踪记录器 | [types/trace.md](types/trace.md) |
+| Tool Args | 内置工具参数类型 | [types/tool.md](types/tool.md) |
 | Adapter | 适配器信息 | [types/adapter.md](types/adapter.md) |
 
 ## 调用规范

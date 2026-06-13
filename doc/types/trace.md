@@ -49,13 +49,28 @@ fun exception(e: Throwable)
 inline fun <T> TraceRecorder.catching(block: () -> T): Result<T>
 ```
 
-执行代码块，捕获异常并自动记录到追踪数据库。返回 `Result<T>`，不会抛出异常。
+执行 lambda，捕获异常并自动记录到追踪数据库。返回 `Result<T>`，不会抛出异常。
 
 **参数：**
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `block` | `() -> T` | 要执行的代码块 |
+| `block` | `() -> T` | lambda |
+
+### catching (扩展)
+
+```kotlin
+inline fun <T, R> T.catching(recorder: TraceRecorder, block: T.() -> R): Result<R>
+```
+
+在对象 `T` 上执行 lambda，捕获异常并自动记录到追踪数据库。返回 `Result<R>`，不会抛出异常。适用于需要在对象上下文中安全执行的场景。
+
+**参数：**
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `recorder` | `TraceRecorder` | 追踪记录器 |
+| `block` | `T.() -> R` | 带接收者的 lambda |
 
 **示例：**
 
