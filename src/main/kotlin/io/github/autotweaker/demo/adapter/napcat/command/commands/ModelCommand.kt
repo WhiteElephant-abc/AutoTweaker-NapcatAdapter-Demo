@@ -4,6 +4,7 @@ import io.github.autotweaker.api.types.config.CoreConfig
 import io.github.autotweaker.api.types.llm.ModelData
 import io.github.autotweaker.api.trace.TraceRecorder
 import io.github.autotweaker.api.trace.catching
+import io.github.autotweaker.api.types.session.SessionConfig
 import io.github.autotweaker.demo.adapter.napcat.command.Command
 import io.github.autotweaker.demo.adapter.napcat.command.CommandContext
 import io.github.autotweaker.demo.adapter.napcat.permission.Role
@@ -216,7 +217,7 @@ class ModelCommand : Command {
         return "我的主模型已设置为: ${getModelDisplayName(context, modelId)}"
     }
 
-    private fun handleFallback(context: CommandContext): String {
+    private suspend fun handleFallback(context: CommandContext): String {
         if (context.args.size < 2) {
             return "用法:\n  /model fallback add <名称|序号>\n  /model fallback remove <名称|序号>"
         }
@@ -231,33 +232,43 @@ class ModelCommand : Command {
         }
     }
 
-    private fun addFallback(context: CommandContext): String {
+    private suspend fun addFallback(context: CommandContext): String {
         if (context.args.size < 3) return "用法: /model fallback add <名称|序号>"
 
         val modelId = resolveModelId(context, context.args[2])
             ?: return "未找到模型: ${context.args[2]}"
 
-        return if (context.sessionManager.addFallbackModel(modelId)) {
-            "已添加备选模型: ${getModelDisplayName(context, modelId)}"
-        } else {
-            "该模型已是备选模型"
+        if (!context.sessionManager.addFallbackModel(modelId)) {
+            return "该模型已是备选模型"
         }
+
+        val name = getModelDisplayName(context, modelId)
+        syncSessionConfig(context) { config ->
+            val updated = (config.fallbackModel ?: emptyList()) + modelId
+            config.copy(fallbackModel = updated.distinct())
+        }
+        return "已添加备选模型: $name"
     }
 
-    private fun removeFallback(context: CommandContext): String {
+    private suspend fun removeFallback(context: CommandContext): String {
         if (context.args.size < 3) return "用法: /model fallback remove <名称|序号>"
 
         val modelId = resolveModelId(context, context.args[2])
             ?: return "未找到模型: ${context.args[2]}"
 
-        return if (context.sessionManager.removeFallbackModel(modelId)) {
-            "已移除备选模型: ${getModelDisplayName(context, modelId)}"
-        } else {
-            "该模型不在备选列表中"
+        if (!context.sessionManager.removeFallbackModel(modelId)) {
+            return "该模型不在备选列表中"
         }
+
+        val name = getModelDisplayName(context, modelId)
+        syncSessionConfig(context) { config ->
+            val updated = config.fallbackModel?.filter { it != modelId }
+            config.copy(fallbackModel = updated?.ifEmpty { null })
+        }
+        return "已移除备选模型: $name"
     }
 
-    private fun setSummarizeModel(context: CommandContext): String {
+    private suspend fun setSummarizeModel(context: CommandContext): String {
         // 压缩模型需要操作员权限
         requireOperator(context)?.let { return it }
 
@@ -267,7 +278,24 @@ class ModelCommand : Command {
             ?: return "未找到模型: ${context.args[1]}"
 
         context.sessionManager.setSummarizeModel(modelId)
+        syncSessionConfig(context) { config ->
+            config.copy(summarizeModel = modelId)
+        }
         return "压缩模型已设置为: ${getModelDisplayName(context, modelId)}"
+    }
+
+    /**
+     * 若用户有活跃会话，用 [transform] 更新其 SessionConfig
+     */
+    private suspend fun syncSessionConfig(
+        context: CommandContext,
+        transform: (SessionConfig) -> SessionConfig
+    ) {
+        val handle = context.sessionManager.getActiveSessionHandle(context.userId) ?: return
+        val config = handle.data.value.config
+        trace.catching {
+            context.core.session.updateConfig(handle.id, transform(config))
+        }
     }
 
     /**
