@@ -38,6 +38,9 @@ class SessionManager(
     /** userId → sessionId */
     private val activeSessions = ConcurrentHashMap<Long, UUID>()
 
+    /** userId → previous sessionId */
+    private val previousSessions = ConcurrentHashMap<Long, UUID>()
+
     /** userId → 主模型 ID（每用户隔离） */
     private val userPrimaryModels = ConcurrentHashMap<Long, UUID>()
 
@@ -308,15 +311,24 @@ class SessionManager(
     }
 
     suspend fun enterSession(userId: Long, sessionId: UUID): SessionHandle {
+        val current = activeSessions[userId]
+        if (current != null) previousSessions[userId] = current
         val handle = core.session.getHandle(sessionId)
         setActiveSession(userId, sessionId)
         return handle
     }
 
     fun exitSession(userId: Long): Boolean {
-        if (activeSessions[userId] == null) return false
+        val current = activeSessions[userId] ?: return false
+        previousSessions[userId] = current
         clearActiveSession(userId)
         return true
+    }
+
+    fun getPreviousSession(userId: Long): UUID? = previousSessions[userId]
+
+    fun clearPreviousSession(userId: Long) {
+        previousSessions.remove(userId)
     }
 
     // ==================== 防抖持久化 ====================
