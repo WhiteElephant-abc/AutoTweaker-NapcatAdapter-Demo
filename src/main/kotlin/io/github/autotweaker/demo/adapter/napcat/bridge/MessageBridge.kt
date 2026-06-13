@@ -244,7 +244,8 @@ class MessageBridge(
         sessionListener.removePendingCall(sessionId, callId)
     }
 
-    private suspend fun sendReply(groupId: Long?, userId: Long, text: String) {
+    private suspend fun sendReply(groupId: Long?, userId: Long, rawText: String) {
+        val text = rawText.trimEnd()
         if (text.isEmpty()) return
         trace.catching {
             val message = listOf(MessageSegment.Text(text))
