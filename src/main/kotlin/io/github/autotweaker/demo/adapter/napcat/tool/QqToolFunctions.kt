@@ -144,4 +144,38 @@ object QqToolFunctions {
     data class GetForwardMsg(
         val id: String,
     ) : Args
+
+    @Serializable
+    data class SendPrivateForwardMsg(
+        val userId: Long,
+        val message: List<Node>,
+    ) : Args
+
+    @Serializable
+    data class SendGroupForwardMsg(
+        val groupId: Long,
+        val message: List<Node>,
+    ) : Args
+
+    @Serializable
+    data class Node(
+        val nickname: String,
+        val userId: String,
+        val content: List<Item>,
+    )
+
+    @Serializable
+    sealed interface Item
+
+    @Serializable
+    data class Text(
+        val text: String,
+    ) : Item
+
+    @Serializable
+    data class NestedNode(
+        val nickname: String,
+        val userId: String,
+        val content: List<Item>,
+    ) : Item
 }

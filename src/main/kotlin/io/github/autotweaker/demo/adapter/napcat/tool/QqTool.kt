@@ -6,6 +6,7 @@ import io.github.autotweaker.api.tool.Tool
 import io.github.autotweaker.demo.adapter.napcat.NapCatAdapter
 import io.github.autotweaker.demo.adapter.napcat.api.NapCatApi
 import io.github.autotweaker.demo.adapter.napcat.model.message.MessageSegment
+import io.github.autotweaker.demo.adapter.napcat.model.message.MessageChain
 import io.github.autotweaker.demo.adapter.napcat.tool.QqToolFunctions.Args
 import io.github.autotweaker.demo.adapter.napcat.tool.QqToolFunctions.BanGroupMember
 import io.github.autotweaker.demo.adapter.napcat.tool.QqToolFunctions.DeleteMessage
@@ -29,6 +30,12 @@ import io.github.autotweaker.demo.adapter.napcat.tool.QqToolFunctions.SendMessag
 import io.github.autotweaker.demo.adapter.napcat.tool.QqToolFunctions.SetGroupAdmin
 import io.github.autotweaker.demo.adapter.napcat.tool.QqToolFunctions.SetGroupCard
 import io.github.autotweaker.demo.adapter.napcat.tool.QqToolFunctions.SetGroupName
+import io.github.autotweaker.demo.adapter.napcat.tool.QqToolFunctions.SendPrivateForwardMsg
+import io.github.autotweaker.demo.adapter.napcat.tool.QqToolFunctions.SendGroupForwardMsg
+import io.github.autotweaker.demo.adapter.napcat.tool.QqToolFunctions.Node
+import io.github.autotweaker.demo.adapter.napcat.tool.QqToolFunctions.Item
+import io.github.autotweaker.demo.adapter.napcat.tool.QqToolFunctions.Text
+import io.github.autotweaker.demo.adapter.napcat.tool.QqToolFunctions.NestedNode
 import kotlinx.coroutines.channels.Channel
 import org.slf4j.LoggerFactory
 import kotlin.reflect.KClass
@@ -91,6 +98,13 @@ class QqTool : Tool<QqToolFunctions.Args> {
         GetFile::file to "文件 ID",
         // 合并转发
         GetForwardMsg::id to "合并转发消息 ID",
+        SendPrivateForwardMsg::userId to "目标用户 QQ 号",
+        SendPrivateForwardMsg::message to "合并转发节点列表",
+        SendGroupForwardMsg::groupId to "目标群号",
+        SendGroupForwardMsg::message to "合并转发节点列表",
+        Node::nickname to "节点显示名称",
+        Node::userId to "节点用户 QQ 号",
+        Node::content to "节点消息内容",
     )
 
     override suspend fun describeFunctions(): Map<KClass<*>, String> = mapOf(
@@ -116,6 +130,8 @@ class QqTool : Tool<QqToolFunctions.Args> {
         GetRecord::class to "获取语音文件信息",
         GetFile::class to "获取文件信息",
         GetForwardMsg::class to "获取合并转发消息",
+        SendPrivateForwardMsg::class to "发送私聊合并转发消息",
+        SendGroupForwardMsg::class to "发送群合并转发消息",
     )
 
     /**
@@ -183,6 +199,8 @@ class QqTool : Tool<QqToolFunctions.Args> {
                 is GetFile -> api.getFile(args.file)
                 // 合并转发
                 is GetForwardMsg -> api.getForwardMsg(args.id)
+                is SendPrivateForwardMsg -> api.sendPrivateForwardMsg(args.userId, args.message.map { it.toMsgNode() })
+                is SendGroupForwardMsg -> api.sendGroupForwardMsg(args.groupId, args.message.map { it.toMsgNode() })
             }
 
             val output = when (result) {
@@ -196,5 +214,14 @@ class QqTool : Tool<QqToolFunctions.Args> {
             logger.error("Failed to execute tool  tool=qq", e)
             Tool.ToolOutput("执行失败，请稍后重试", false)
         }
+    }
+    private fun QqToolFunctions.Node.toMsgNode(): MessageSegment.Node =
+        MessageSegment.Node(userId = userId, nickname = nickname, content = content.map { it.toSeg() })
+
+    private fun QqToolFunctions.Item.toSeg(): MessageSegment = when (this) {
+        is QqToolFunctions.Text -> MessageSegment.Text(text)
+        is QqToolFunctions.NestedNode -> MessageSegment.Node(
+            userId = userId, nickname = nickname, content = content.map { it.toSeg() }
+        )
     }
 }

@@ -364,6 +364,8 @@ class SessionListener(
             is QqToolFunctions.GetRecord -> "获取语音 ${args.file}$suffix"
             is QqToolFunctions.GetFile -> "获取文件 ${args.file}$suffix"
             is QqToolFunctions.GetForwardMsg -> "获取合并转发消息 ${args.id}$suffix"
+            is QqToolFunctions.SendPrivateForwardMsg -> "发送私聊合并转发消息给 ${args.userId}$suffix"
+            is QqToolFunctions.SendGroupForwardMsg -> "发送群合并转发消息到 ${args.groupId}$suffix"
         }
     }
 
