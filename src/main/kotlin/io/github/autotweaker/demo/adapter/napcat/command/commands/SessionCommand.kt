@@ -29,6 +29,7 @@ class SessionCommand : Command {
             "new", "create" -> newSession(context)
             "enter" -> enterSession(context)
             "exit", "leave" -> exitSession(context)
+            "stop" -> stopSession(context)
             "remove", "rm", "delete" -> removeSession(context)
             else -> "未知子命令: ${context.args[0]}\n用法: $usage"
         }
@@ -125,17 +126,35 @@ class SessionCommand : Command {
     }
 
     private suspend fun exitSession(context: CommandContext): String {
+        if (!context.sessionManager.exitSession(context.userId)) {
+            return "当前没有活跃会话"
+        }
+        return "已退出会话"
+    }
+
+    private suspend fun stopSession(context: CommandContext): String {
         val handle = context.sessionManager.getActiveSessionHandle(context.userId)
             ?: return "当前没有活跃会话"
 
         return trace.catching {
-            try {
-                context.core.session.stop(handle.id)
-            } finally {
-                context.sessionManager.exitSession(context.userId)
-            }
-            "已停止并退出会话"
-        }.getOrElse { "退出失败，请稍后重试" }
+            context.core.session.stop(handle.id)
+            context.sessionManager.exitSession(context.userId)
+            "会话已停止"
+        }.getOrElse { "停止失败，请稍后重试" }
+    }
+
+    private suspend fun goBack(context: CommandContext): String {
+        val previousId = context.sessionManager.getPreviousSession(context.userId)
+            ?: return "没有上一个会话"
+
+        val handle = try {
+            context.sessionManager.enterSession(context.userId, previousId)
+        } catch (e: Exception) {
+            context.sessionManager.clearPreviousSession(context.userId)
+            return "上一个会话已不存在"
+        }
+        val data = handle.data.value
+        return "已切换到: ${data.title ?: "未设置"}"
     }
 
     private suspend fun removeSession(context: CommandContext): String {

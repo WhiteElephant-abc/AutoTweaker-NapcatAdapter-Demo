@@ -79,7 +79,7 @@ class WorkspaceCommand : Command {
         }
     }
 
-    private fun selectWorkspace(context: CommandContext): String {
+    private suspend fun selectWorkspace(context: CommandContext): String {
         if (context.args.size < 2) return "用法: /workspace select <名称|序号>"
 
         val input = context.args[1]
@@ -109,8 +109,28 @@ class WorkspaceCommand : Command {
 
         if (workspace == null) return "未找到工作区: $input"
 
+        // 自动退出当前会话
+        context.sessionManager.exitSession(context.userId)
+
         context.sessionManager.setUserWorkspace(context.userId, workspace.meta.id)
-        return "已选择工作区: ${workspace.meta.displayName}"
+
+        // 显示会话列表
+        val sessionIds = workspace.sessionIds.orEmpty()
+        val sessions = if (sessionIds.isNotEmpty()) context.core.session.loadData(sessionIds) else emptyList()
+
+        return buildString {
+            appendLine("已切换到: ${workspace.meta.displayName}")
+            if (sessions.isNotEmpty()) {
+                appendLine()
+                sessions.forEachIndexed { i, data ->
+                    appendLine("  ${i + 1}. ${data.title ?: "未设置"}")
+                }
+                appendLine()
+                appendLine("/session enter <序号> 进入会话")
+            } else {
+                appendLine("没有会话，/session new 创建")
+            }
+        }
     }
 
     private suspend fun createWorkspace(context: CommandContext): String {
