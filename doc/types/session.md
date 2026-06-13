@@ -238,8 +238,17 @@ data class Call(
     val name: String,
     val arguments: String,
     val reason: String?,
+    val validatedArgs: JsonElement?,
 ) : Tool()
 ```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `assistantMessage` | `UUID` | 关联的 Assistant 消息 ID |
+| `name` | `String` | 工具名称（格式：`tool-function`） |
+| `arguments` | `String` | 原始参数 JSON |
+| `reason` | `String?` | 调用原因 |
+| `validatedArgs` | `JsonElement?` | 校验后的参数 JSON，可直接反序列化到工具的 Args 类型（密封类会自动路由到对应子类） |
 
 #### Tool.Result
 
@@ -322,19 +331,21 @@ sealed class SessionOutput {
 
 ```kotlin
 data class ToolCallRequest(
-    val name: String,
+    val toolName: String,
     val callId: String,
     val arguments: String,
-    val reason: String? = null,
+    val validatedArgs: JsonElement?,
+    val reason: String,
 )
 ```
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `name` | `String` | 工具名称 |
+| `toolName` | `String` | 工具名称 |
 | `callId` | `String` | 工具调用 ID |
 | `arguments` | `String` | 参数 JSON |
-| `reason` | `String?` | 调用原因 |
+| `validatedArgs` | `JsonElement?` | 校验后的参数 JSON，可直接反序列化到工具的 Args 类型（密封类会自动路由到对应子类） |
+| `reason` | `String` | 调用原因 |
 
 ---
 
