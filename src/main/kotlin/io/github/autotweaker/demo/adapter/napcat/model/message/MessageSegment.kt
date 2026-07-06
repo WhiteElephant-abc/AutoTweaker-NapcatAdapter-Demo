@@ -57,10 +57,10 @@ sealed interface MessageSegment {
     data class Video(val file: String) : MessageSegment
 
     /** 合并转发消息节点 */
+    @Serializable
     data class Node(
-        val userId: String,
-        val nickname: String,
-        val content: MessageChain? = null
+        @Serializable(with = FlexibleStringSerializer::class) @JvmField val userId: String,
+        val nickname: String
     ) : MessageSegment
 
     /** 戳一戳消息段 */
@@ -101,17 +101,10 @@ object MessageSegmentSerializer : KSerializer<MessageSegment> {
             "json" -> MessageSegment.JsonMsg(data["data"]?.jsonPrimitive?.content ?: "")
             "record" -> MessageSegment.Record(data["file"]?.jsonPrimitive?.content ?: "")
             "video" -> MessageSegment.Video(data["file"]?.jsonPrimitive?.content ?: "")
-            "node" -> {
-                val contentArray = data["content"]?.jsonArray
-                val content = contentArray?.map { element ->
-                    Json.decodeFromJsonElement(MessageSegment.serializer(), element)
-                }
-                MessageSegment.Node(
-                    userId = data["user_id"]?.jsonPrimitive?.content ?: "",
-                    nickname = data["nickname"]?.jsonPrimitive?.content ?: "",
-                    content = content
-                )
-            }
+            "node" -> MessageSegment.Node(
+                userId = data["user_id"]?.jsonPrimitive?.content ?: "",
+                nickname = data["nickname"]?.jsonPrimitive?.content ?: ""
+            )
             "poke" -> MessageSegment.Poke(
                 type = data["type"]?.jsonPrimitive?.content ?: "",
                 id = data["id"]?.jsonPrimitive?.content ?: ""
@@ -166,13 +159,6 @@ object MessageSegmentSerializer : KSerializer<MessageSegment> {
                 putJsonObject("data") {
                     put("user_id", value.userId)
                     put("nickname", value.nickname)
-                    value.content?.let { chain ->
-                        putJsonArray("content") {
-                            chain.forEach { segment ->
-                                add(Json.encodeToJsonElement(MessageSegment.serializer(), segment))
-                            }
-                        }
-                    }
                 }
             }
             is MessageSegment.Poke -> buildJsonObject {
